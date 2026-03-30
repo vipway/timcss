@@ -1,0 +1,177 @@
+{
+  "ok": true,
+  "strict": true,
+  "checkedAt": "2026-03-28T15:59:28.399Z",
+  "runs": 5,
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "darwin-arm64"
+  },
+  "catalog": {
+    "schemaVersion": "1.2.0",
+    "generatedAt": "2026-03-28T15:58:30.001Z",
+    "packageVersion": "0.0.1"
+  },
+  "thresholds": {
+    "minHitAt3": 0.8,
+    "maxInspectMeanMs": 4000,
+    "maxBuildMeanMs": 5000
+  },
+  "timings": {
+    "inspectWechat": {
+      "runs": 5,
+      "minMs": 29.38,
+      "meanMs": 31.91,
+      "p95Ms": 36.66,
+      "maxMs": 36.66
+    },
+    "buildWechat": {
+      "runs": 5,
+      "minMs": 43.56,
+      "meanMs": 44.95,
+      "p95Ms": 46.14,
+      "maxMs": 46.14
+    },
+    "catalogQuery": {
+      "runs": 5,
+      "minMs": 27.16,
+      "meanMs": 27.67,
+      "p95Ms": 28.1,
+      "maxMs": 28.1
+    },
+    "catalogIntent": {
+      "runs": 5,
+      "minMs": 32.41,
+      "meanMs": 33.86,
+      "p95Ms": 35.75,
+      "maxMs": 35.75
+    }
+  },
+  "quality": {
+    "scanner": {
+      "fixtures": 4,
+      "expectedTokens": 25,
+      "missingTokens": 0,
+      "absentViolations": 0,
+      "missRate": 0
+    },
+    "retrieval": {
+      "hitAt3": 1,
+      "hitAt5": 1,
+      "cases": [
+        {
+          "query": "底部安全区",
+          "expected": [
+            "pb-safe",
+            "pb-tabbar-safe"
+          ],
+          "top3": [
+            "pb-safe",
+            "pb-tabbar-safe",
+            "pt-safe"
+          ],
+          "top5": [
+            "pb-safe",
+            "pb-tabbar-safe",
+            "pt-safe",
+            "py-safe",
+            "h-tabbar"
+          ],
+          "hitAt3": true,
+          "hitAt5": true
+        },
+        {
+          "query": "卡片圆角",
+          "expected": [
+            "rounded-card"
+          ],
+          "top3": [
+            "rounded-card",
+            "gap-card",
+            "p-card"
+          ],
+          "top5": [
+            "rounded-card",
+            "gap-card",
+            "p-card",
+            "shadow-card",
+            "bg-surface"
+          ],
+          "hitAt3": true,
+          "hitAt5": true
+        },
+        {
+          "query": "按压状态",
+          "expected": [
+            "pressed:"
+          ],
+          "top3": [
+            "pressed:"
+          ],
+          "top5": [
+            "pressed:"
+          ],
+          "hitAt3": true,
+          "hitAt5": true
+        },
+        {
+          "query": "按钮高度",
+          "expected": [
+            "h-control",
+            "h-control-lg"
+          ],
+          "top3": [
+            "h-control",
+            "h-control-lg",
+            "h-control-sm"
+          ],
+          "top5": [
+            "h-control",
+            "h-control-lg",
+            "h-control-sm",
+            "h-control-xl",
+            "rounded-control"
+          ],
+          "hitAt3": true,
+          "hitAt5": true
+        },
+        {
+          "query": "发丝线",
+          "expected": [
+            "hairline",
+            "hairline-b"
+          ],
+          "top3": [
+            "hairline",
+            "hairline-b",
+            "hairline-l"
+          ],
+          "top5": [
+            "hairline",
+            "hairline-b",
+            "hairline-l",
+            "hairline-r",
+            "hairline-t"
+          ],
+          "hitAt3": true,
+          "hitAt5": true
+        }
+      ]
+    }
+  },
+  "artifacts": {
+    "wechatCssBytes": 884,
+    "wechatCssFile": "/var/folders/bw/xgkd0_t51q90ysy1v8c7zpxm0000gn/T/timcss-benchmark-fnNzC1/timcss-wechat.css"
+  },
+  "snapshots": {
+    "inspectCandidates": 24,
+    "inspectDiagnostics": 0,
+    "intentTop5": [
+      "pb-tabbar-safe",
+      "pb-safe",
+      "pt-safe",
+      "notch:",
+      "py-safe"
+    ]
+  }
+}

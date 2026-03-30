@@ -1,0 +1,10 @@
+{
+  "name": "@timcss/example-react-mobile",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build:timcss": "pnpm --dir ../.. run timcss:example:react:build",
+    "inspect:timcss": "pnpm --dir ../.. run timcss:example:react:inspect",
+    "doctor:timcss": "pnpm --dir ../.. run timcss:example:react:doctor"
+  }
+}

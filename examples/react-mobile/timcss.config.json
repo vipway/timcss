@@ -1,0 +1,24 @@
+{
+  "platform": "mobile",
+  "content": ["src/**/*.{tsx,jsx,html}"],
+  "diagnostics": {
+    "enabled": true,
+    "level": "info",
+    "output": "pretty"
+  },
+  "presets": {
+    "mobile": {
+      "enabled": true,
+      "includeLayouts": true,
+      "includeControls": true,
+      "includeSemanticColors": true
+    },
+    "wechat": {
+      "enabled": false
+    },
+    "recipes": {
+      "enabled": false
+    }
+  },
+  "output": { "file": "dist/timcss.css" }
+}

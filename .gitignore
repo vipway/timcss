@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+dist/
+.timcss/
+packages/*/dist/
+apps/*/dist/
+examples/*/dist/
+coverage/
+.turbo
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+target/
+.debug/

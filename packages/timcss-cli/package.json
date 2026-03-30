@@ -1,0 +1,18 @@
+{
+  "name": "@timcss/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": { "timcss": "./dist/index.js" },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": { "lint": "tsc --noEmit", "build": "tsup", "dev": "tsup --watch", "test": "vitest run packages/timcss-cli/tests", "clean": "rm -rf dist" },
+  "dependencies": {
+    "@timcss/core": "workspace:*",
+    "@timcss/diagnostics": "workspace:*",
+    "@timcss/engine": "workspace:*",
+    "@timcss/scanner": "workspace:*"
+  }
+}

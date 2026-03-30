@@ -1,0 +1,42 @@
+{
+  "checkedAt": "2026-03-27T14:33:11.298Z",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "darwin-arm64"
+  },
+  "scope": "partial-same-environment",
+  "methodology": "竞品 A 使用同一样本与同一 CLI 入口，在共享编译路径下关闭 TimCSS 预设与变体生成 Tailwind core 风格基线；无法同口径执行的指标会明确标记 N/A。",
+  "scenario": "examples/wechat-miniapp/src/pages/index/index.wxml",
+  "timcss": {
+    "version": "0.0.1",
+    "build": {
+      "runs": 5,
+      "minMs": 43.83,
+      "meanMs": 45.51,
+      "p95Ms": 46.48,
+      "maxMs": 46.48
+    },
+    "cssBytes": 884,
+    "scannerMissRate": 0,
+    "retrievalHitAt3": 1
+  },
+  "competitor": {
+    "name": "Tailwind CSS v4 Core-Style Baseline（shared compile path）",
+    "version": "4.2.1",
+    "build": {
+      "runs": 5,
+      "minMs": 40.34,
+      "meanMs": 41.25,
+      "p95Ms": 41.83,
+      "maxMs": 41.83
+    },
+    "cssBytes": 17,
+    "scannerMissRate": null,
+    "retrievalHitAt3": null,
+    "limitations": [
+      "当前环境缺少 cargo，无法构建 Tailwind 官方 oxide 扫描器。",
+      "竞品未提供与 TimCSS `catalog --intent` 对齐的语义检索接口。",
+      "当前报告中的竞品 A 为共享编译路径下的 core 风格基线，不代表官方 CLI 的全部行为。"
+    ]
+  }
+}

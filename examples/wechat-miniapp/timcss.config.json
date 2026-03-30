@@ -1,0 +1,25 @@
+{
+  "platform": "wechat-miniprogram",
+  "prefix": "tm",
+  "content": ["src/**/*.wxml"],
+  "diagnostics": {
+    "enabled": true,
+    "level": "info",
+    "output": "pretty"
+  },
+  "presets": {
+    "mobile": {
+      "enabled": true,
+      "includeLayouts": true,
+      "includeControls": true,
+      "includeSemanticColors": true
+    },
+    "wechat": {
+      "enabled": true
+    },
+    "recipes": {
+      "enabled": false
+    }
+  },
+  "output": { "dir": "dist" }
+}

@@ -1,0 +1,725 @@
+{
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-03-30T14:07:27.870Z",
+  "packageVersion": "0.0.1",
+  "items": [
+    {
+      "id": "timcss.utility.gap-card",
+      "className": "gap-card",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "卡片内部子元素的常规间距",
+      "output": "gap: var(--layout-card);",
+      "whenToUse": "卡片内部标题、说明、按钮组",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.gap-section",
+      "className": "gap-section",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "模块与模块之间的主间距",
+      "output": "gap: var(--layout-section);",
+      "whenToUse": "垂直 stack 布局",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-nav",
+      "className": "h-nav",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "导航区域高度",
+      "output": "height: var(--layout-nav);",
+      "whenToUse": "顶部导航、沉浸式头部容器",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-tabbar",
+      "className": "h-tabbar",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "底部 tabbar 区域高度",
+      "output": "height: var(--layout-tabbar);",
+      "whenToUse": "底部导航、吸底操作容器",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.p-card",
+      "className": "p-card",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "卡片默认内边距",
+      "output": "padding: var(--layout-card);",
+      "whenToUse": "白底卡片、信息卡、订单卡",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.px-page",
+      "className": "px-page",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "页面左右基础边距",
+      "output": "padding-inline: var(--layout-page);",
+      "whenToUse": "页面主容器、列表页、表单页",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.py-section",
+      "className": "py-section",
+      "kind": "utility",
+      "category": "layout",
+      "intent": "模块上下节奏间距",
+      "output": "padding-block: var(--layout-section);",
+      "whenToUse": "区块型页面、内容段落分组",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-control",
+      "className": "h-control",
+      "kind": "utility",
+      "category": "control",
+      "intent": "默认控件高度",
+      "output": "height: var(--control-md);",
+      "whenToUse": "默认按钮、输入框、选择器",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-control-lg",
+      "className": "h-control-lg",
+      "kind": "utility",
+      "category": "control",
+      "intent": "大控件高度",
+      "output": "height: var(--control-lg);",
+      "whenToUse": "强调按钮、主操作区",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-control-sm",
+      "className": "h-control-sm",
+      "kind": "utility",
+      "category": "control",
+      "intent": "小控件高度",
+      "output": "height: var(--control-sm);",
+      "whenToUse": "紧凑按钮、紧凑表单",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-control-xl",
+      "className": "h-control-xl",
+      "kind": "utility",
+      "category": "control",
+      "intent": "超大控件高度",
+      "output": "height: var(--control-xl);",
+      "whenToUse": "吸底主按钮、大尺寸操作区",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.h-control-xs",
+      "className": "h-control-xs",
+      "kind": "utility",
+      "category": "control",
+      "intent": "极小控件高度",
+      "output": "height: var(--control-xs);",
+      "whenToUse": "小标签、小尺寸输入元素",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.min-h-touch",
+      "className": "min-h-touch",
+      "kind": "utility",
+      "category": "control",
+      "intent": "确保满足移动端触控热区",
+      "output": "min-height: var(--layout-touch);",
+      "whenToUse": "任何可点击行、按钮、列表项",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.rounded-card",
+      "className": "rounded-card",
+      "kind": "utility",
+      "category": "shape",
+      "intent": "卡片圆角",
+      "output": "border-radius: var(--radius-lg);",
+      "whenToUse": "卡片、弹层、信息块",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.rounded-control",
+      "className": "rounded-control",
+      "kind": "utility",
+      "category": "shape",
+      "intent": "控件圆角",
+      "output": "border-radius: var(--radius-md);",
+      "whenToUse": "按钮、输入框、胶囊控件",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.bg-background",
+      "className": "bg-background",
+      "kind": "utility",
+      "category": "color",
+      "intent": "页面背景色",
+      "output": "background-color: var(--color-background);",
+      "whenToUse": "页面根节点、列表页底色",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.bg-primary",
+      "className": "bg-primary",
+      "kind": "utility",
+      "category": "color",
+      "intent": "主品牌背景色",
+      "output": "background-color: var(--color-primary);",
+      "whenToUse": "主按钮、主状态块",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.bg-surface",
+      "className": "bg-surface",
+      "kind": "utility",
+      "category": "color",
+      "intent": "表面层背景色",
+      "output": "background-color: var(--color-surface);",
+      "whenToUse": "卡片、弹层、白底容器",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.border-default",
+      "className": "border-default",
+      "kind": "utility",
+      "category": "color",
+      "intent": "默认边框色",
+      "output": "border-color: var(--color-border);",
+      "whenToUse": "输入框、卡片边框、分隔线容器",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.text-muted",
+      "className": "text-muted",
+      "kind": "utility",
+      "category": "color",
+      "intent": "次级文本颜色",
+      "output": "color: var(--color-muted);",
+      "whenToUse": "辅助说明、时间、备注",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.text-on-primary",
+      "className": "text-on-primary",
+      "kind": "utility",
+      "category": "color",
+      "intent": "主色背景上的文本色",
+      "output": "color: var(--color-on-primary);",
+      "whenToUse": "主按钮文本、主色块内文案",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.text-primary",
+      "className": "text-primary",
+      "kind": "utility",
+      "category": "color",
+      "intent": "主要文本颜色",
+      "output": "color: var(--color-text);",
+      "whenToUse": "正文、标题、主信息",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.shadow-card",
+      "className": "shadow-card",
+      "kind": "utility",
+      "category": "shadow",
+      "intent": "轻量卡片阴影",
+      "output": "box-shadow: var(--shadow-card);",
+      "whenToUse": "默认卡片、轻浮层",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.shadow-elevated",
+      "className": "shadow-elevated",
+      "kind": "utility",
+      "category": "shadow",
+      "intent": "强调浮层阴影",
+      "output": "box-shadow: var(--shadow-elevated);",
+      "whenToUse": "弹层、浮动操作面板",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-mobile",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pb-safe",
+      "className": "pb-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "底部安全区内边距",
+      "output": "padding-bottom: env(safe-area-inset-bottom);",
+      "whenToUse": "吸底按钮、底部输入区",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pb-tabbar-safe",
+      "className": "pb-tabbar-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "为底部 tabbar 和安全区同时预留空间",
+      "output": "padding-bottom: calc(var(--layout-tabbar) + env(safe-area-inset-bottom));",
+      "whenToUse": "吸底操作区、底部内容滚动容器",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pl-safe",
+      "className": "pl-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "左侧安全区内边距",
+      "output": "padding-left: env(safe-area-inset-left);",
+      "whenToUse": "横向布局容器",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pr-safe",
+      "className": "pr-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "右侧安全区内边距",
+      "output": "padding-right: env(safe-area-inset-right);",
+      "whenToUse": "横向布局容器",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pt-nav-safe",
+      "className": "pt-nav-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "为顶部导航和安全区同时预留空间",
+      "output": "padding-top: calc(var(--layout-nav) + env(safe-area-inset-top));",
+      "whenToUse": "沉浸式页面头部",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.pt-safe",
+      "className": "pt-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "顶部安全区内边距",
+      "output": "padding-top: env(safe-area-inset-top);",
+      "whenToUse": "沉浸式头部、刘海屏顶部避让",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.px-safe",
+      "className": "px-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "左右安全区内边距",
+      "output": "padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);",
+      "whenToUse": "全宽容器",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.py-safe",
+      "className": "py-safe",
+      "kind": "utility",
+      "category": "wechat-safe-area",
+      "intent": "上下安全区内边距",
+      "output": "padding-block: env(safe-area-inset-top) env(safe-area-inset-bottom);",
+      "whenToUse": "整屏安全区容器",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.hairline",
+      "className": "hairline",
+      "kind": "utility",
+      "category": "wechat-hairline",
+      "intent": "全边发丝线",
+      "output": "box-shadow: inset 0 0 0 1px var(--color-border);",
+      "whenToUse": "卡片外框、浅边框块",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.hairline-b",
+      "className": "hairline-b",
+      "kind": "utility",
+      "category": "wechat-hairline",
+      "intent": "下边发丝线",
+      "output": "box-shadow: inset 0 -1px 0 0 var(--color-border);",
+      "whenToUse": "列表项底部分隔",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.hairline-l",
+      "className": "hairline-l",
+      "kind": "utility",
+      "category": "wechat-hairline",
+      "intent": "左边发丝线",
+      "output": "box-shadow: inset 1px 0 0 0 var(--color-border);",
+      "whenToUse": "左侧边界线",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.hairline-r",
+      "className": "hairline-r",
+      "kind": "utility",
+      "category": "wechat-hairline",
+      "intent": "右边发丝线",
+      "output": "box-shadow: inset -1px 0 0 0 var(--color-border);",
+      "whenToUse": "右侧边界线",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.utility.hairline-t",
+      "className": "hairline-t",
+      "kind": "utility",
+      "category": "wechat-hairline",
+      "intent": "上边发丝线",
+      "output": "box-shadow: inset 0 1px 0 0 var(--color-border);",
+      "whenToUse": "顶部边界线",
+      "platforms": [
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/preset-wechat",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.disabled:",
+      "className": "disabled:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "禁用状态",
+      "output": "&[disabled], &:disabled, &[aria-disabled=\"true\"]",
+      "whenToUse": "表单控件、按钮",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.keyboard-open:",
+      "className": "keyboard-open:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "软键盘打开时生效",
+      "output": "[data-keyboard-open=\"true\"] &",
+      "whenToUse": "输入区、底部表单布局",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "experimental",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.notch:",
+      "className": "notch:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "刘海屏上下文时生效",
+      "output": "[data-device-notch=\"true\"] &",
+      "whenToUse": "沉浸式头部与吸底区域",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.pressed:",
+      "className": "pressed:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "按压状态",
+      "output": "&:active",
+      "whenToUse": "按钮、列表项、可点击块",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.safe:",
+      "className": "safe:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "处于安全区上下文时生效",
+      "output": "[data-safe-area=\"true\"] &",
+      "whenToUse": "组件级安全区布局",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    },
+    {
+      "id": "timcss.variant.tabbar-present:",
+      "className": "tabbar-present:",
+      "kind": "variant",
+      "category": "variant",
+      "intent": "页面存在 tabbar 时生效",
+      "output": "[data-tabbar=\"true\"] &",
+      "whenToUse": "底部区域避让",
+      "platforms": [
+        "mobile",
+        "wechat-miniprogram"
+      ],
+      "sourcePackage": "@timcss/variants",
+      "status": "stable",
+      "since": "0.0.1",
+      "schemaVersion": "1.2.0"
+    }
+  ]
+}

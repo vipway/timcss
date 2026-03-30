@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "esnext.disposable", "dom"],
+
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "allowJs": true,
+
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "preserveConstEnums": true,
+    "noEmit": true,
+
+    "skipLibCheck": true,
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@timcss/core": ["./timcss-core/src/index.ts"],
+      "@timcss/tokens": ["./timcss-tokens/src/index.ts"],
+      "@timcss/preset-mobile": ["./timcss-preset-mobile/src/index.ts"],
+      "@timcss/preset-wechat": ["./timcss-preset-wechat/src/index.ts"],
+      "@timcss/variants": ["./timcss-variants/src/index.ts"],
+      "@timcss/scanner": ["./timcss-scanner/src/index.ts"],
+      "@timcss/diagnostics": ["./timcss-diagnostics/src/index.ts"],
+      "@timcss/engine": ["./timcss-engine/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

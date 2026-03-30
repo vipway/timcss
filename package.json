@@ -1,0 +1,75 @@
+{
+  "name": "@timcss/workspace",
+  "private": true,
+  "version": "0.0.1",
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 100,
+    "plugins": [
+      "prettier-plugin-organize-imports"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "tsconfig.json"
+        ],
+        "options": {
+          "parser": "jsonc"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "clean": "pnpm run timcss:clean",
+    "format": "prettier --write .",
+    "lint": "prettier --check . && pnpm run timcss:typecheck",
+    "typecheck": "pnpm --filter \"./packages/timcss-*\" run lint",
+    "build": "pnpm run timcss:prepare",
+    "dev": "pnpm run timcss:docs:dev",
+    "test": "pnpm run timcss:test",
+    "tdd": "vitest --hideSkippedTests --config vitest.timcss.config.ts",
+    "bench": "pnpm run timcss:benchmark",
+    "timcss:prepare": "pnpm --filter \"./packages/timcss-*\" run build && node ./scripts/write-timcss-prepare-manifest.mjs",
+    "timcss:typecheck": "pnpm --filter \"./packages/timcss-*\" run lint",
+    "timcss:test": "vitest run --hideSkippedTests --config vitest.timcss.config.ts",
+    "timcss:build": "node ./scripts/run-timcss-cli.mjs build",
+    "timcss:dev": "node ./scripts/run-timcss-cli.mjs dev",
+    "timcss:inspect": "node ./scripts/run-timcss-cli.mjs inspect",
+    "timcss:doctor": "node ./scripts/run-timcss-cli.mjs doctor",
+    "timcss:print-entry": "node ./scripts/run-timcss-cli.mjs print-entry",
+    "timcss:catalog": "node ./scripts/run-timcss-cli.mjs catalog",
+    "timcss:docs:generate": "node ./scripts/generate-timcss-doc-index.mjs",
+    "timcss:docs:dev": "pnpm run timcss:docs:generate && pnpm --filter @timcss/docs dev",
+    "timcss:docs:build": "pnpm run timcss:docs:generate && pnpm --filter @timcss/docs build",
+    "timcss:clean": "rm -rf .timcss dist apps/docs/dist examples/react-mobile/dist examples/wechat-miniapp/dist packages/timcss-*/dist",
+    "timcss:benchmark": "node ./scripts/timcss-benchmark.mjs",
+    "timcss:benchmark:strict": "node ./scripts/timcss-benchmark.mjs --strict",
+    "timcss:competitor:scorecard": "node ./scripts/timcss-competitor-scorecard.mjs",
+    "timcss:scanner:baseline": "node ./scripts/timcss-scanner-baseline.mjs",
+    "timcss:release:smoke": "node ./scripts/timcss-release-smoke.mjs",
+    "timcss:release:validate": "node ./scripts/timcss-release-validate.mjs",
+    "timcss:example:wechat:build": "node ./scripts/run-timcss-cli.mjs build --config examples/wechat-miniapp/timcss.config.json",
+    "timcss:example:wechat:dev": "node ./scripts/run-timcss-cli.mjs dev --config examples/wechat-miniapp/timcss.config.json --wechat",
+    "timcss:example:wechat:inspect": "node ./scripts/run-timcss-cli.mjs inspect --config examples/wechat-miniapp/timcss.config.json",
+    "timcss:example:wechat:doctor": "node ./scripts/run-timcss-cli.mjs doctor --config examples/wechat-miniapp/timcss.config.json",
+    "timcss:example:react:build": "node ./scripts/run-timcss-cli.mjs build --config examples/react-mobile/timcss.config.json --out examples/react-mobile/dist/timcss.css",
+    "timcss:example:react:inspect": "node ./scripts/run-timcss-cli.mjs inspect --config examples/react-mobile/timcss.config.json",
+    "timcss:example:react:doctor": "node ./scripts/run-timcss-cli.mjs doctor --config examples/react-mobile/timcss.config.json"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.5.4",
+    "vitest": "^4.0.18"
+  },
+  "packageManager": "pnpm@9.6.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "lightningcss@1.31.1": "patches/lightningcss@1.31.1.patch"
+    }
+  }
+}

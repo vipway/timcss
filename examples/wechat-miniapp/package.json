@@ -1,0 +1,11 @@
+{
+  "name": "@timcss/example-wechat-miniapp",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build:timcss": "pnpm --dir ../.. run timcss:example:wechat:build",
+    "dev:timcss": "pnpm --dir ../.. run timcss:example:wechat:dev",
+    "inspect:timcss": "pnpm --dir ../.. run timcss:example:wechat:inspect",
+    "doctor:timcss": "pnpm --dir ../.. run timcss:example:wechat:doctor"
+  }
+}

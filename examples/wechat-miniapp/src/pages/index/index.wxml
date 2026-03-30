@@ -1,0 +1,28 @@
+<view class="tm-bg-background tm-px-page tm-py-section tm-pb-safe">
+  <view class="tm-h-nav tm-text-primary tm-p-card tm-hairline-b">
+    TimCSS WeChat Mini Program
+  </view>
+
+  <view class="tm-gap-section" style="display:flex;flex-direction:column;">
+    <view class="tm-bg-surface tm-p-card tm-rounded-card tm-shadow-card tm-gap-card" style="display:flex;flex-direction:column;">
+      <view class="tm-text-primary">Atomic first mobile layout</view>
+      <view class="tm-text-muted">Use page, section and card utilities instead of ad-hoc spacing values.</view>
+    </view>
+
+    <view class="tm-bg-surface tm-p-card tm-rounded-card tm-shadow-card tm-gap-card" style="display:flex;flex-direction:column;">
+      <view class="tm-text-primary">Control surface</view>
+      <button class="tm-h-control tm-rounded-control tm-bg-primary tm-text-on-primary tm-pressed:opacity-80">
+        Build with TimCSS
+      </button>
+      <button class="tm-h-control-sm tm-rounded-control tm-bg-surface tm-text-primary tm-hairline">
+        Secondary action
+      </button>
+    </view>
+
+    <view class="tm-bg-surface tm-p-card tm-rounded-card tm-shadow-card tm-gap-card tm-pb-tabbar-safe" style="display:flex;flex-direction:column;">
+      <view class="tm-text-primary">Wechat-only platform utilities</view>
+      <view class="tm-text-muted">Safe-area and hairline utilities are platform atomic helpers.</view>
+      <view class="tm-h-tabbar tm-hairline-t tm-text-muted" style="display:flex;align-items:center;">Bottom action zone</view>
+    </view>
+  </view>
+</view>
