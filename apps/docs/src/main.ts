@@ -6,12 +6,13 @@ import {
   normalizeTimcssIntentQuery,
   splitTimcssSearchTerms,
 } from '../../../packages/timcss-core/src/search'
+import { createMobileTokens } from '../../../packages/timcss-tokens/src'
 import docIndex from '../../../docs/atomic-utilities-index.json'
 
 type StatusTag = 'stable' | 'experimental'
 type PlatformTag = 'mobile' | 'wechat-miniprogram'
 type KindTag = 'utility' | 'variant'
-type RouteId = 'overview' | 'guides' | 'browse' | 'recipes' | 'catalog' | 'faq'
+type RouteId = 'overview' | 'foundations' | 'guides' | 'browse' | 'recipes' | 'catalog' | 'faq'
 
 type UtilityItem = {
   id: string
@@ -47,6 +48,12 @@ type SearchContext = {
   intentMode: boolean
   intentTerms: string[]
   highlightQuery: string
+}
+
+type InputFocusSnapshot = {
+  id: 'search-input' | 'palette-input'
+  selectionStart: number | null
+  selectionEnd: number | null
 }
 
 type Recipe = {
@@ -90,7 +97,22 @@ type DocsHashState = {
   selected: string
 }
 
+type OverviewPath = {
+  title: string
+  summary: string
+  route: RouteId
+  actionLabel: string
+}
+
+type FoundationScale = {
+  title: string
+  value: string
+  detail: string
+  classes: string[]
+}
+
 const staleIndexThresholdMs = 7 * 24 * 60 * 60 * 1000
+let ignoreNextHashChange = false
 
 const categoryOrder = [
   'layout',
@@ -123,15 +145,121 @@ const platformLabels: Record<string, string> = {
 
 const routeLabels: Record<RouteId, string> = {
   overview: '总览',
+  foundations: '尺寸基础',
   guides: '开始使用',
   browse: '分类浏览',
   recipes: '常用组合',
   catalog: '原子检索',
   faq: 'FAQ',
 }
-const routeOrder: RouteId[] = ['overview', 'guides', 'browse', 'recipes', 'catalog', 'faq']
+const routeOrder: RouteId[] = ['overview', 'foundations', 'guides', 'browse', 'recipes', 'catalog', 'faq']
 
 const quickSearches = ['底部安全区 吸底', '按钮高度 触控', '卡片圆角 阴影', '发丝线 分隔', 'pressed:']
+
+const overviewPaths: OverviewPath[] = [
+  {
+    title: '先看尺寸体系',
+    summary: '先理解页面留白、模块节奏、触控高度和安全区，再选原子，整体会更稳。',
+    route: 'foundations',
+    actionLabel: '查看尺寸规则',
+  },
+  {
+    title: '第一次接入',
+    summary: '先看平台边界、最小配置和第一条验证命令，再决定进入哪条集成路径。',
+    route: 'guides',
+    actionLabel: '查看接入方式',
+  },
+  {
+    title: '直接查原子',
+    summary: '按问题、意图和类名搜索，适合已经知道自己要解决什么布局或交互问题。',
+    route: 'catalog',
+    actionLabel: '开始检索',
+  },
+  {
+    title: '先拿组合',
+    summary: '如果你还不想从单个原子开始，可以先复制高频移动端组合，再按业务微调。',
+    route: 'recipes',
+    actionLabel: '查看常用组合',
+  },
+]
+
+const comfortableTokens = createMobileTokens('comfortable')
+const compactTokens = createMobileTokens('compact')
+const spaciousTokens = createMobileTokens('spacious')
+
+const foundationScales: FoundationScale[] = [
+  {
+    title: '页面留白',
+    value: comfortableTokens.layout.page,
+    detail: `默认页边距。compact ${compactTokens.layout.page}，spacious ${spaciousTokens.layout.page}。`,
+    classes: ['px-page'],
+  },
+  {
+    title: '模块节奏',
+    value: comfortableTokens.layout.section,
+    detail: `默认模块上下节奏。compact ${compactTokens.layout.section}，spacious ${spaciousTokens.layout.section}。`,
+    classes: ['py-section', 'gap-section'],
+  },
+  {
+    title: '卡片内边距',
+    value: comfortableTokens.layout.card,
+    detail: `默认卡片内距。compact ${compactTokens.layout.card}，spacious ${spaciousTokens.layout.card}。`,
+    classes: ['p-card', 'gap-card'],
+  },
+  {
+    title: '触控热区',
+    value: comfortableTokens.layout.touch,
+    detail: `点击区域最小高度。compact ${compactTokens.layout.touch}，spacious ${spaciousTokens.layout.touch}。`,
+    classes: ['min-h-touch'],
+  },
+  {
+    title: '默认控件高',
+    value: comfortableTokens.controlHeight.md,
+    detail: `默认按钮/输入高度。sm ${comfortableTokens.controlHeight.sm}，lg ${comfortableTokens.controlHeight.lg}。`,
+    classes: ['h-control', 'h-control-sm', 'h-control-lg'],
+  },
+  {
+    title: '导航与底栏',
+    value: `${comfortableTokens.layout.nav} / ${comfortableTokens.layout.tabbar}`,
+    detail: `导航高 ${comfortableTokens.layout.nav}，tabbar 高 ${comfortableTokens.layout.tabbar}。`,
+    classes: ['h-nav', 'h-tabbar', 'pt-nav-safe', 'pb-tabbar-safe'],
+  },
+]
+
+function convertRpxToPreviewPx(value: string, factor = 0.5) {
+  return value.replace(/(-?\d*\.?\d+)rpx/g, (_, num) => `${Number(num) * factor}px`)
+}
+
+function toStyleAttribute(style: Record<string, string>) {
+  return Object.entries(style)
+    .map(([key, value]) => `${key}:${value}`)
+    .join(';')
+}
+
+const previewThemeStyle = toStyleAttribute({
+  '--preview-page': convertRpxToPreviewPx(comfortableTokens.layout.page),
+  '--preview-section': convertRpxToPreviewPx(comfortableTokens.layout.section),
+  '--preview-card-padding': convertRpxToPreviewPx(comfortableTokens.layout.card),
+  '--preview-touch': convertRpxToPreviewPx(comfortableTokens.layout.touch),
+  '--preview-nav': convertRpxToPreviewPx(comfortableTokens.layout.nav),
+  '--preview-tabbar': convertRpxToPreviewPx(comfortableTokens.layout.tabbar),
+  '--preview-control-xs': convertRpxToPreviewPx(comfortableTokens.controlHeight.xs),
+  '--preview-control-sm': convertRpxToPreviewPx(comfortableTokens.controlHeight.sm),
+  '--preview-control-md': convertRpxToPreviewPx(comfortableTokens.controlHeight.md),
+  '--preview-control-lg': convertRpxToPreviewPx(comfortableTokens.controlHeight.lg),
+  '--preview-control-xl': convertRpxToPreviewPx(comfortableTokens.controlHeight.xl),
+  '--preview-radius-card': convertRpxToPreviewPx(comfortableTokens.radius.lg),
+  '--preview-radius-control': convertRpxToPreviewPx(comfortableTokens.radius.md),
+  '--preview-border': comfortableTokens.colors.border,
+  '--preview-primary': comfortableTokens.colors.primary,
+  '--preview-surface': comfortableTokens.colors.surface,
+  '--preview-background': comfortableTokens.colors.background,
+  '--preview-text': comfortableTokens.colors.text,
+  '--preview-muted': comfortableTokens.colors.muted,
+  '--preview-on-primary': comfortableTokens.colors['on-primary'],
+  '--preview-shadow-card': convertRpxToPreviewPx(comfortableTokens.shadows.card),
+  '--preview-shadow-elevated': convertRpxToPreviewPx(comfortableTokens.shadows.elevated),
+})
 
 const recipes: Recipe[] = [
   {
@@ -238,6 +366,14 @@ const faqs: FaqItem[] = [
     answer: 'H5 移动端优先用 output.file 生成单文件 CSS；微信小程序优先用 output.dir 按页输出。需要 shared 层时，让 TimCSS 自动拆分即可。',
   },
   {
+    question: '移动端尺寸为什么优先从 px-page、py-section、h-control、min-h-touch 开始？',
+    answer: '因为它们分别对应页面留白、模块节奏、控件高度和触控热区这四个基础层。先稳定这四层，页面会比到处手写 margin、padding、height 更整齐，也更容易统一成设计规范。',
+  },
+  {
+    question: 'TimCSS 的 rpx 尺寸怎么理解，compact / comfortable / spacious 又该怎么选？',
+    answer: 'TimCSS 的移动端 token 以 8rpx 为基准，comfortable 作为默认密度。信息密度高的业务页可选 compact，强调可读性或大按钮场景可选 spacious，但一页里最好保持同一套 density，不要混着用。',
+  },
+  {
     question: '搜索不到类名怎么办？',
     answer: '先换成场景词搜索，再执行 inspect 和 doctor。若仍无结果，先确认 content globs 覆盖了真实模板文件，再检查是否写了无法静态提取的动态 class。',
   },
@@ -315,6 +451,563 @@ function toDocItem(item: UtilityItem): DocItem {
   }
 }
 
+function getRelatedClassNames(item: DocItem) {
+  let related: string[] = []
+
+  if (item.kind === 'variant') {
+    related.push('h-control', 'min-h-touch')
+    if (item.className === 'pressed:') related.push('rounded-control', 'bg-primary', 'text-on-primary')
+    if (item.className === 'disabled:') related.push('h-control', 'text-muted')
+    if (item.className === 'notch:' || item.className === 'safe:') related.push('pt-safe', 'pb-safe', 'px-safe')
+    if (item.className === 'tabbar-present:') related.push('pb-tabbar-safe', 'h-tabbar')
+    if (item.className === 'keyboard-open:') related.push('pb-safe', 'h-control')
+  } else if (item.category === 'layout') {
+    related.push('px-page', 'py-section', 'p-card')
+    if (item.className === 'px-page') related.push('py-section', 'gap-section')
+    if (item.className === 'py-section' || item.className === 'gap-section') related.push('px-page', 'p-card')
+    if (item.className === 'p-card' || item.className === 'gap-card') related.push('rounded-card', 'bg-surface', 'shadow-card')
+    if (item.className === 'h-nav') related.push('pt-nav-safe', 'px-page')
+    if (item.className === 'h-tabbar') related.push('pb-tabbar-safe', 'px-page')
+  } else if (item.category === 'control') {
+    related.push('rounded-control', 'min-h-touch')
+    if (item.className.startsWith('h-control')) related.push('bg-primary', 'text-on-primary', 'pressed:')
+    if (item.className === 'min-h-touch') related.push('h-control', 'pressed:')
+  } else if (item.category === 'shape') {
+    related.push('bg-surface', 'shadow-card')
+  } else if (item.category === 'color') {
+    related.push('rounded-control', 'bg-surface')
+    if (item.className === 'bg-primary') related.push('text-on-primary', 'rounded-control', 'pressed:')
+    if (item.className === 'bg-surface') related.push('rounded-card', 'shadow-card', 'text-primary')
+    if (item.className === 'text-primary' || item.className === 'text-muted') related.push('bg-surface')
+  } else if (item.category === 'shadow') {
+    related.push('bg-surface', 'rounded-card')
+  } else if (item.category === 'wechat-safe-area') {
+    related.push('px-page', 'pb-safe', 'pb-tabbar-safe', 'pt-safe', 'pt-nav-safe')
+  } else if (item.category === 'wechat-hairline') {
+    related.push('bg-surface', 'px-page')
+  }
+
+  return [...new Set(related)].filter((className) => className !== item.className)
+}
+
+function getUsageSteps(item: DocItem) {
+  if (item.kind === 'variant') {
+    return [
+      '把它写在前面，后面跟具体原子，不要单独使用。',
+      '优先叠加透明度、位移、safe-area 或颜色类，保持状态变化单一清楚。',
+      '先确认当前平台真的存在这个上下文，再写进业务模板。',
+    ]
+  }
+
+  if (item.category === 'layout') {
+    if (item.className === 'px-page') {
+      return ['放在页面主容器，先建立统一左右留白。', '页面内部模块再用 py-section 或 gap-section 拉开垂直节奏。', '不要把页面留白和卡片内边距写在同一层容器上。']
+    }
+    if (item.className === 'py-section' || item.className === 'gap-section') {
+      return ['用于模块和模块之间的节奏，不用于按钮或小元素内部。', '整页都统一使用同一档节奏，局部再微调。', '通常与 px-page 搭配，先确定横向留白再确定纵向节奏。']
+    }
+    if (item.className === 'p-card' || item.className === 'gap-card') {
+      return ['只管卡片内部信息组织，不承担页面整体留白。', '内容区一般再配 rounded-card、bg-surface、shadow-card。', '列表卡片尽量统一一套内边距，不要一张卡一种大小。']
+    }
+    if (item.className === 'h-nav' || item.className === 'h-tabbar') {
+      return ['只定义结构高度，再按需要叠加安全区原子。', '沉浸式页面优先组合 pt-nav-safe 或 pb-tabbar-safe。', '导航区和内容区分层处理，不要直接把内容 padding 写进导航高度层。']
+    }
+  }
+
+  if (item.category === 'control') {
+    return ['先确定控件高度，再决定圆角、背景和状态。', '可点击区域至少满足 min-h-touch，再根据视觉层级选 h-control-*。', '主按钮通常组合 rounded-control、bg-primary、text-on-primary、pressed:*。']
+  }
+
+  if (item.category === 'shape') {
+    return ['先用它建立形状，再补背景和阴影。', '卡片和控件的圆角不要混用，保持层级和语义稳定。', '一页里尽量控制圆角档位，不要出现太多半径。']
+  }
+
+  if (item.category === 'color') {
+    return ['颜色原子只解决语义颜色，不负责布局和尺寸。', '主色背景优先配 text-on-primary，白底容器优先配 text-primary。', '页面大面积底色与卡片表面层尽量分开，避免层级不清。']
+  }
+
+  if (item.category === 'shadow') {
+    return ['阴影只用来表达层级，不要每个容器都加。', '普通信息卡优先 shadow-card，浮层或强调面板再用 shadow-elevated。', '阴影通常和 bg-surface、rounded-card 一起出现。']
+  }
+
+  if (item.category === 'wechat-safe-area') {
+    return ['先判断页面是顶部沉浸式还是底部吸底式，再选对应 safe-area 原子。', '安全区原子只负责避让，不替代页面留白。', '与 px-page、h-nav、h-tabbar 组合时，先定结构高度，再补安全区。']
+  }
+
+  if (item.category === 'wechat-hairline') {
+    return ['优先用于浅分隔和边界，不要承担强视觉边框。', '列表里通常只保留一侧 hairline，避免多边重复发灰。', '与 bg-surface 配合时层级最自然。']
+  }
+
+  return ['先用它解决一个问题，再叠加其他原子。', '保持布局、尺寸、颜色、状态分层组合。', '如果需要更完整的起步结构，先去常用组合页复制。']
+}
+
+function getSizingNotes(item: DocItem) {
+  let notes: Record<string, string[]> = {
+    'px-page': [
+      `comfortable 默认页边距是 ${comfortableTokens.layout.page}，compact ${compactTokens.layout.page}，spacious ${spaciousTokens.layout.page}。`,
+      '它适合页面主容器，不适合卡片内部。',
+    ],
+    'py-section': [
+      `模块默认节奏是 ${comfortableTokens.layout.section}，用于区块之间，不用于按钮或输入框内部。`,
+      '整页统一这一档节奏，会比到处手写 margin 更稳。',
+    ],
+    'gap-section': [
+      `建议把纵向 stack 的主间距统一到 ${comfortableTokens.layout.section}。`,
+      '同层连续模块优先一套 gap，再局部覆盖。',
+    ],
+    'p-card': [
+      `卡片默认内边距是 ${comfortableTokens.layout.card}。`,
+      '卡片内距和页面留白分层处理，阅读节奏更稳定。',
+    ],
+    'gap-card': [
+      `卡片内部元素默认间距也是 ${comfortableTokens.layout.card}。`,
+      '适合标题、说明、按钮组的常规堆叠。',
+    ],
+    'h-nav': [
+      `默认导航结构高度是 ${comfortableTokens.layout.nav}。`,
+      '沉浸式头部通常再配 pt-nav-safe，而不是直接把安全区写死进高度。',
+    ],
+    'h-tabbar': [
+      `默认底栏结构高度是 ${comfortableTokens.layout.tabbar}。`,
+      '吸底区通常再配 pb-tabbar-safe，同步避让 tabbar 和底部安全区。',
+    ],
+    'h-control-xs': [`极小控件高度是 ${comfortableTokens.controlHeight.xs}。`, '只适合辅助操作或极简标签式交互，不适合主要按钮。'],
+    'h-control-sm': [`紧凑控件高度是 ${comfortableTokens.controlHeight.sm}。`, '适合筛选条、次操作按钮、紧凑表单。'],
+    'h-control': [`默认控件高度是 ${comfortableTokens.controlHeight.md}。`, `如果没有特别理由，优先从这一档开始。`],
+    'h-control-lg': [`强调控件高度是 ${comfortableTokens.controlHeight.lg}。`, '适合主操作区和更强的点击可见性。'],
+    'h-control-xl': [`超大控件高度是 ${comfortableTokens.controlHeight.xl}。`, '适合吸底主按钮和大尺寸操作面板，不建议日常列表滥用。'],
+    'min-h-touch': [
+      `最小触控热区是 ${comfortableTokens.layout.touch}。`,
+      '它对应移动端点击热区下限思路，用来保证列表项、按钮和可点击块不难点。',
+    ],
+    'rounded-control': [
+      `默认控件圆角是 ${comfortableTokens.radius.md}。`,
+      '按钮、输入框、胶囊控件尽量统一这档圆角。',
+    ],
+    'rounded-card': [
+      `默认卡片圆角是 ${comfortableTokens.radius.lg}。`,
+      '信息卡、弹层、白底表面层比控件圆角更大一档，会更有层次。',
+    ],
+  }
+
+  if (item.category === 'wechat-safe-area') {
+    return ['安全区原子不是视觉尺寸规范，而是结构避让规范。', '顶部场景优先 pt-safe / pt-nav-safe，底部场景优先 pb-safe / pb-tabbar-safe。']
+  }
+
+  return notes[item.className] ?? null
+}
+
+function renderDetailList(items: string[]) {
+  return `<ul class="detail-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+}
+
+function renderPreviewShell(body: string, note: string) {
+  return `
+    <div class="preview-card" style="${escapeHtml(previewThemeStyle)}">
+      <div class="preview-frame">
+        ${body}
+      </div>
+      <p class="preview-note">${escapeHtml(note)}</p>
+    </div>
+  `
+}
+
+function renderLayoutPreview(item: DocItem) {
+  if (item.className === 'px-page') {
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen preview-screen-page">
+            <div class="preview-page-shell">
+              <div class="preview-block preview-block-primary"></div>
+              <div class="preview-card-surface">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+              <div class="preview-block"></div>
+            </div>
+          </div>
+        </div>
+      `,
+      '页面主容器先统一左右留白，再在内容层继续排卡片和模块。',
+    )
+  }
+
+  if (item.className === 'py-section' || item.className === 'gap-section') {
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen preview-screen-page">
+            <div class="preview-page-shell preview-stack-section">
+              <div class="preview-block preview-block-primary"></div>
+              <div class="preview-block"></div>
+              <div class="preview-block"></div>
+            </div>
+          </div>
+        </div>
+      `,
+      '这一层控制的是模块和模块之间的主节奏，不是按钮或卡片内部的小间距。',
+    )
+  }
+
+  if (item.className === 'p-card' || item.className === 'gap-card') {
+    return renderPreviewShell(
+      `
+        <div class="preview-card-surface preview-card-surface-wide">
+          <div class="preview-card-content">
+            <div class="preview-line preview-line-strong"></div>
+            <div class="preview-line"></div>
+            <div class="preview-button preview-button-inline"></div>
+          </div>
+        </div>
+      `,
+      '卡片内边距和卡片内部元素间距要稳定，卡片之间的距离再交给 page / section 层。',
+    )
+  }
+
+  if (item.className === 'h-nav') {
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen">
+            <div class="preview-nav-bar">
+              <span class="preview-dot"></span>
+              <div class="preview-line preview-line-short"></div>
+              <span class="preview-dot"></span>
+            </div>
+            <div class="preview-page-shell">
+              <div class="preview-block preview-block-primary"></div>
+              <div class="preview-card-surface">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `,
+      '导航高度先独立出来，沉浸式头部再叠加安全区原子。',
+    )
+  }
+
+  if (item.className === 'h-tabbar') {
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen preview-screen-tabbar">
+            <div class="preview-page-shell">
+              <div class="preview-block preview-block-primary"></div>
+              <div class="preview-block"></div>
+            </div>
+            <div class="preview-tabbar">
+              <span class="preview-tab"></span>
+              <span class="preview-tab is-active"></span>
+              <span class="preview-tab"></span>
+            </div>
+          </div>
+        </div>
+      `,
+      '底栏高度先确定，再决定底部吸底操作区是否需要继续避让安全区。',
+    )
+  }
+
+  return null
+}
+
+function renderControlPreview(item: DocItem) {
+  if (item.className.startsWith('h-control')) {
+    let size =
+      item.className === 'h-control-xs'
+        ? 'xs'
+        : item.className === 'h-control-sm'
+          ? 'sm'
+          : item.className === 'h-control-lg'
+            ? 'lg'
+            : item.className === 'h-control-xl'
+              ? 'xl'
+              : 'md'
+    return renderPreviewShell(
+      `
+        <div class="preview-surface-stack">
+          <button class="preview-button" data-size="${size}">主要操作</button>
+          <div class="preview-spec-row">
+            <span>当前高度</span>
+            <strong>${escapeHtml(
+              size === 'xs'
+                ? comfortableTokens.controlHeight.xs
+                : size === 'sm'
+                  ? comfortableTokens.controlHeight.sm
+                  : size === 'lg'
+                    ? comfortableTokens.controlHeight.lg
+                    : size === 'xl'
+                      ? comfortableTokens.controlHeight.xl
+                      : comfortableTokens.controlHeight.md,
+            )}</strong>
+          </div>
+        </div>
+      `,
+      '先定控件高度，再补圆角、颜色和状态，按钮层级会更统一。',
+    )
+  }
+
+  if (item.className === 'min-h-touch') {
+    return renderPreviewShell(
+      `
+        <div class="preview-touch-row">
+          <div class="preview-touch-target">
+            <div class="preview-line preview-line-strong"></div>
+            <div class="preview-line preview-line-short"></div>
+          </div>
+          <div class="preview-touch-rule">min ${escapeHtml(comfortableTokens.layout.touch)}</div>
+        </div>
+      `,
+      '触控热区比视觉元素本身更重要。先保点击面积，再谈视觉收紧。',
+    )
+  }
+
+  return null
+}
+
+function renderShapePreview(item: DocItem) {
+  if (item.className === 'rounded-card') {
+    return renderPreviewShell(
+      `
+        <div class="preview-card-surface preview-card-surface-wide">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+          <div class="preview-line preview-line-short"></div>
+        </div>
+      `,
+      '卡片圆角比控件圆角更大一档，层级会更自然。',
+    )
+  }
+
+  if (item.className === 'rounded-control') {
+    return renderPreviewShell(
+      `
+        <div class="preview-surface-stack">
+          <button class="preview-button">主要按钮</button>
+          <button class="preview-button preview-button-secondary">次操作</button>
+        </div>
+      `,
+      '控件圆角适合按钮、输入框和胶囊控件，不建议和卡片圆角混用。',
+    )
+  }
+
+  return null
+}
+
+function renderColorPreview(item: DocItem) {
+  if (item.className === 'bg-primary' || item.className === 'text-on-primary') {
+    return renderPreviewShell(
+      `
+        <div class="preview-surface-stack">
+          <button class="preview-button">立即提交</button>
+        </div>
+      `,
+      '主色层适合最重要的操作。主色背景里的文案优先配 text-on-primary。',
+    )
+  }
+
+  if (item.className === 'bg-surface' || item.className === 'text-primary') {
+    return renderPreviewShell(
+      `
+        <div class="preview-screen-card">
+          <div class="preview-card-surface preview-card-surface-wide">
+            <div class="preview-line preview-line-strong"></div>
+            <div class="preview-line"></div>
+            <div class="preview-line preview-line-short"></div>
+          </div>
+        </div>
+      `,
+      'surface 负责承载信息层，主文本颜色负责阅读层级。',
+    )
+  }
+
+  if (item.className === 'bg-background') {
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen preview-screen-background">
+            <div class="preview-page-shell">
+              <div class="preview-card-surface">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+              <div class="preview-card-surface">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `,
+      '页面背景和卡片表面层分开，层级才会清楚。',
+    )
+  }
+
+  if (item.className === 'text-muted') {
+    return renderPreviewShell(
+      `
+        <div class="preview-surface-stack">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line preview-line-muted"></div>
+          <div class="preview-line preview-line-muted preview-line-short"></div>
+        </div>
+      `,
+      '辅助文本颜色只用于次级说明，不要承担主要信息。',
+    )
+  }
+
+  if (item.className === 'border-default') {
+    return renderPreviewShell(
+      `
+        <div class="preview-input"></div>
+      `,
+      '默认边框色适合输入框、卡片边界和轻分隔，不适合强强调。',
+    )
+  }
+
+  return null
+}
+
+function renderShadowPreview(item: DocItem) {
+  return renderPreviewShell(
+    `
+      <div class="preview-screen-card">
+        <div class="preview-card-surface preview-card-surface-wide ${item.className === 'shadow-elevated' ? 'is-elevated' : ''}">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+          <div class="preview-line preview-line-short"></div>
+        </div>
+      </div>
+    `,
+    item.className === 'shadow-elevated' ? '更强的层级适合浮层和强调面板。' : '常规阴影适合信息卡，不要全页泛滥使用。',
+  )
+}
+
+function renderWechatPreview(item: DocItem) {
+  if (item.category === 'wechat-safe-area') {
+    let modifier =
+      item.className === 'pb-tabbar-safe'
+        ? ' preview-safe-bottom-tabbar'
+        : item.className === 'pt-nav-safe'
+          ? ' preview-safe-top-nav'
+          : item.className === 'pt-safe'
+            ? ' preview-safe-top'
+            : item.className === 'pb-safe'
+              ? ' preview-safe-bottom'
+              : item.className === 'px-safe'
+                ? ' preview-safe-inline'
+                : item.className === 'py-safe'
+                  ? ' preview-safe-block'
+                  : item.className === 'pl-safe'
+                    ? ' preview-safe-left'
+                    : item.className === 'pr-safe'
+                      ? ' preview-safe-right'
+                      : ''
+
+    return renderPreviewShell(
+      `
+        <div class="preview-phone">
+          <div class="preview-screen preview-screen-safe${modifier}">
+            <div class="preview-notch"></div>
+            <div class="preview-safe-content">
+              <div class="preview-card-surface">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+            </div>
+            ${item.className === 'pb-tabbar-safe' ? '<div class="preview-tabbar"></div>' : ''}
+          </div>
+        </div>
+      `,
+      '安全区原子负责结构避让，不替代页面留白。预览里着色区域表示被预留出来的空间。',
+    )
+  }
+
+  if (item.category === 'wechat-hairline') {
+    let edge =
+      item.className === 'hairline-t'
+        ? 'is-top'
+        : item.className === 'hairline-r'
+          ? 'is-right'
+          : item.className === 'hairline-b'
+            ? 'is-bottom'
+            : item.className === 'hairline-l'
+              ? 'is-left'
+              : 'is-all'
+    return renderPreviewShell(
+      `
+        <div class="preview-card-surface preview-card-surface-wide preview-hairline ${edge}">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+        </div>
+      `,
+      '发丝线适合弱分隔和轻边界，用来提示层级，不适合做强轮廓。',
+    )
+  }
+
+  return null
+}
+
+function renderVariantPreview(item: DocItem) {
+  if (item.className === 'pressed:') {
+    return renderPreviewShell(
+      `
+        <div class="preview-state-grid">
+          <button class="preview-button preview-state-button">默认</button>
+          <button class="preview-button preview-state-button is-pressed">按压</button>
+        </div>
+      `,
+      '变体本身不是样式，它负责在某个状态上下文里激活后面的原子类。',
+    )
+  }
+
+  if (item.className === 'disabled:') {
+    return renderPreviewShell(
+      `
+        <div class="preview-state-grid">
+          <button class="preview-button preview-state-button">可用</button>
+          <button class="preview-button preview-state-button is-disabled">禁用</button>
+        </div>
+      `,
+      '禁用态通常搭配透明度、文字颜色或边框变化一起出现。',
+    )
+  }
+
+  return renderPreviewShell(
+    `
+      <div class="preview-context">
+        <span class="preview-context-chip">${escapeHtml(item.className)}</span>
+        <div class="preview-card-surface preview-card-surface-wide">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+        </div>
+      </div>
+    `,
+    '这类原子提供的是上下文条件。实际视觉变化要看它和后续原子类如何组合。',
+  )
+}
+
+function renderUtilityPreview(item: DocItem) {
+  if (item.kind === 'variant') return renderVariantPreview(item)
+  if (item.category === 'layout') return renderLayoutPreview(item)
+  if (item.category === 'control') return renderControlPreview(item)
+  if (item.category === 'shape') return renderShapePreview(item)
+  if (item.category === 'color') return renderColorPreview(item)
+  if (item.category === 'shadow') return renderShadowPreview(item)
+  if (item.category.startsWith('wechat-')) return renderWechatPreview(item)
+  return renderPreviewShell(
+    `
+      <div class="preview-card-surface preview-card-surface-wide">
+        <div class="preview-line preview-line-strong"></div>
+        <div class="preview-line"></div>
+      </div>
+    `,
+    '这张预览卡用于帮助你先看尺寸和层级，最终值仍以代码输出为准。',
+  )
+}
+
 async function loadIndex(): Promise<{ meta: DocIndexPayload; items: DocItem[] }> {
   let payload = docIndex as DocIndexPayload
   return {
@@ -324,7 +1017,15 @@ async function loadIndex(): Promise<{ meta: DocIndexPayload; items: DocItem[] }>
 }
 
 function isRouteId(value: string): value is RouteId {
-  return value === 'overview' || value === 'guides' || value === 'browse' || value === 'recipes' || value === 'catalog' || value === 'faq'
+  return (
+    value === 'overview' ||
+    value === 'foundations' ||
+    value === 'guides' ||
+    value === 'browse' ||
+    value === 'recipes' ||
+    value === 'catalog' ||
+    value === 'faq'
+  )
 }
 
 function getHashState(): DocsHashState {
@@ -352,7 +1053,10 @@ function setHashState(state: DocsHashState) {
   if (state.selected) params.set('selected', state.selected)
   let routePart = state.route === 'overview' ? '/' : `/${state.route}`
   let target = `#${routePart}${params.size > 0 ? `?${params.toString()}` : ''}`
-  if (window.location.hash !== target) window.location.hash = target
+  if (window.location.hash !== target) {
+    ignoreNextHashChange = true
+    window.location.hash = target
+  }
 }
 
 function createSearchContext(query: string): SearchContext {
@@ -426,6 +1130,27 @@ function formatGeneratedAt(value: string) {
   let date = new Date(value)
   if (Number.isNaN(date.getTime())) return '未知'
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function captureInputFocusSnapshot(): InputFocusSnapshot | null {
+  let active = document.activeElement
+  if (!(active instanceof HTMLInputElement)) return null
+  if (active.id !== 'search-input' && active.id !== 'palette-input') return null
+  return {
+    id: active.id,
+    selectionStart: active.selectionStart,
+    selectionEnd: active.selectionEnd,
+  }
+}
+
+function restoreInputFocusSnapshot(root: ParentNode, snapshot: InputFocusSnapshot | null) {
+  if (!snapshot) return
+  let input = root.querySelector<HTMLInputElement>(`#${snapshot.id}`)
+  if (!input) return
+  input.focus()
+  if (snapshot.selectionStart !== null && snapshot.selectionEnd !== null) {
+    input.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd)
+  }
 }
 
 function getIndexNotice(meta: DocIndexPayload) {
@@ -677,6 +1402,17 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         },
       },
       {
+        id: 'route-foundations',
+        title: '前往尺寸基础',
+        subtitle: '查看移动端尺寸、触控热区和布局节奏',
+        keywords: ['foundations', '尺寸', 'spacing', 'touch', '触控', 'rpx'],
+        action() {
+          route = 'foundations'
+          paletteOpen = false
+          render()
+        },
+      },
+      {
         id: 'route-catalog',
         title: '前往原子检索',
         subtitle: '按问题、类名和意图搜索原子类',
@@ -798,22 +1534,26 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">TimCSS Docs</p>
-          <h1>把移动端原子样式讲清楚，而不是把用户淹没在信息里。</h1>
-          <p class="hero-text">
-            TimCSS 专注移动端 H5 与原生微信小程序。文档站优先回答 3 件事：支持边界、接入方式、原子类怎么搜。
-          </p>
+          <h1>先定移动端规则，再选原子。</h1>
+          <p class="hero-text">这里优先回答原子类怎么用、尺寸怎么定、安全区怎么避让，而不是只给你一张 class 名单。</p>
+          <div class="proof-strip">
+            <span class="proof-pill">全部原子类</span>
+            <span class="proof-pill">移动端尺寸体系</span>
+            <span class="proof-pill">微信小程序避让规则</span>
+            <span class="proof-pill">原子组合建议</span>
+          </div>
           <div class="hero-actions">
-            <button class="primary-link button-link" data-route="catalog">开始搜索原子</button>
-            <button class="ghost-link button-link" data-route="guides">查看接入方式</button>
+            <button class="primary-link button-link" data-route="foundations">先看尺寸基础</button>
+            <button class="ghost-link button-link" data-route="catalog">开始搜索原子</button>
           </div>
         </div>
         <div class="hero-side">
           <div class="summary-card">
-            <div class="summary-title">当前官方口径</div>
+            <div class="summary-title">这站重点</div>
             <ul class="summary-list">
-              <li>已验证：移动端 H5、原生微信小程序</li>
-              <li>优先能力：安全区、发丝线、移动端控件、状态变体</li>
-              <li>Taro / uni-app：可接入，需项目验证</li>
+              <li>每个原子都给出作用、用法、搭配与最小示例</li>
+              <li>尺寸基础页先讲清楚 page / section / card / control / safe-area</li>
+              <li>官方验证平台：移动端 H5、原生微信小程序</li>
             </ul>
           </div>
           <div class="summary-stats">
@@ -826,15 +1566,37 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
 
       <section class="section-block">
         <div class="section-head">
-          <p class="eyebrow">Principles</p>
-          <h2>文档站只回答 4 个问题。</h2>
-          <p>参考 Tailwind 的文档分层方式，但更聚焦移动端与小程序的原子语义。</p>
+          <p class="eyebrow">Start Here</p>
+          <h2>先选路径。</h2>
+          <p>第一次进站，先看尺寸基础；已经有问题场景时，直接进原子检索。</p>
+        </div>
+        <div class="path-grid">
+          ${overviewPaths
+            .map(
+              (path) => `
+                <article class="path-card">
+                  <div class="summary-title">推荐路径</div>
+                  <h3>${escapeHtml(path.title)}</h3>
+                  <p>${escapeHtml(path.summary)}</p>
+                  <button class="inline-btn" data-route="${path.route}">${escapeHtml(path.actionLabel)}</button>
+                </article>
+              `,
+            )
+            .join('')}
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-head">
+          <p class="eyebrow">What Matters</p>
+          <h2>文档主线是原子，不是概念堆叠。</h2>
+          <p>所有页面都围绕使用场景、尺寸规则和复制落地来组织。</p>
         </div>
         <div class="principle-grid">
-          <article class="principle-card"><h3>它解决什么问题？</h3><p>比如安全区、发丝线、按钮高度、卡片层级，而不是只有 class 名字。</p></article>
-          <article class="principle-card"><h3>什么时候用？</h3><p>每个原子都给出使用场景、组合建议和最小示例，避免用户自己猜。</p></article>
-          <article class="principle-card"><h3>在哪个平台可用？</h3><p>H5 与微信小程序边界直接写清楚，不把“可接入”说成“已验证”。</p></article>
-          <article class="principle-card"><h3>怎么快速找到？</h3><p>支持按类名、按问题、按意图搜索，并给出常见场景组合。</p></article>
+          <article class="principle-card"><h3>先讲尺寸</h3><p>把页面留白、控件高度、触控热区和安全区先讲透，再落到原子类。</p></article>
+          <article class="principle-card"><h3>再讲用法</h3><p>每个原子都解释作用、何时用、怎么搭，而不是只有 class 名。</p></article>
+          <article class="principle-card"><h3>最后给示例</h3><p>原子详情页直接给最小示例和相关原子，方便复制和继续扩展。</p></article>
+          <article class="principle-card"><h3>平台边界写清</h3><p>H5 与微信小程序能力分开写，避免把“可接入”误当成“已验证”。</p></article>
         </div>
       </section>
 
@@ -844,6 +1606,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
           <h2>常用入口</h2>
         </div>
         <div class="overview-actions">
+          <button class="shortcut-chip" data-route="foundations">看尺寸基础</button>
           ${quickSearches
             .map(
               (item) =>
@@ -851,7 +1614,6 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
             )
             .join('')}
           <button class="shortcut-chip" data-route="guides">查看接入路径</button>
-          <button class="shortcut-chip" data-route="faq">查看 FAQ</button>
         </div>
       </section>
 
@@ -869,13 +1631,116 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     `
   }
 
+  function renderFoundationsPage() {
+    return `
+      <section class="section-block route-hero">
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">Foundations</p>
+            <h2>这页先讲移动端尺寸规则。</h2>
+            <p>先确定 page、section、card、control 和 safe-area 的基准，再去选具体原子类，页面会更整齐，也更容易维护。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">这页优先看</div>
+            <strong>8rpx 基准、触控热区、控件高度、安全区避让</strong>
+            <p>如果你在设计尺寸、按钮高度和页面留白，这页应该先看。</p>
+          </aside>
+        </div>
+
+        <div class="foundation-grid">
+          ${foundationScales
+            .map(
+              (scale) => `
+                <article class="foundation-card">
+                  <div class="summary-title">核心基准</div>
+                  <h3>${escapeHtml(scale.title)}</h3>
+                  <div class="foundation-value">${escapeHtml(scale.value)}</div>
+                  <p>${escapeHtml(scale.detail)}</p>
+                  <div class="tag-row">
+                    ${scale.classes.map((className) => `<button class="tag tag-button" data-search-chip="${escapeHtml(className)}">${escapeHtml(className)}</button>`).join('')}
+                  </div>
+                </article>
+              `,
+            )
+            .join('')}
+        </div>
+
+        <div class="foundation-layout">
+          <article class="notice-card">
+            <h2>尺寸使用顺序</h2>
+            ${renderDetailList([
+              `页面根容器先用 px-page，comfortable 默认是 ${comfortableTokens.layout.page}。`,
+              `模块节奏优先用 py-section 或 gap-section，comfortable 默认是 ${comfortableTokens.layout.section}。`,
+              `卡片内部优先用 p-card 或 gap-card，comfortable 默认是 ${comfortableTokens.layout.card}。`,
+              `可点击区域至少满足 min-h-touch，comfortable 默认是 ${comfortableTokens.layout.touch}。`,
+              '顶部沉浸式场景优先用 pt-safe / pt-nav-safe，底部吸底场景优先用 pb-safe / pb-tabbar-safe。',
+            ])}
+          </article>
+          <article class="notice-card">
+            <h2>密度怎么选</h2>
+            ${renderDetailList([
+              `compact 更适合信息密度高的业务页：page ${compactTokens.layout.page}，touch ${compactTokens.layout.touch}。`,
+              `comfortable 适合作为默认方案：page ${comfortableTokens.layout.page}，touch ${comfortableTokens.layout.touch}。`,
+              `spacious 更适合首屏营销、强操作和高可读页面：page ${spaciousTokens.layout.page}，touch ${spaciousTokens.layout.touch}。`,
+              '整页优先保持同一套 density，不要每个模块各用一套尺寸节奏。',
+            ])}
+          </article>
+        </div>
+
+        <div class="section-block">
+          <div class="section-head">
+            <p class="eyebrow">Quick Mapping</p>
+            <h2>常见问题该先看哪些原子</h2>
+            <p>先从问题出发，再进入原子检索页拿单个类和最小示例。</p>
+          </div>
+          <div class="foundation-grid foundation-grid-tight">
+            <article class="foundation-card">
+              <h3>页面整体留白不稳</h3>
+              <p>先统一页面横向留白，再决定区块节奏。</p>
+              <div class="tag-row">
+                <button class="tag tag-button" data-search-chip="px-page">px-page</button>
+                <button class="tag tag-button" data-search-chip="py-section">py-section</button>
+                <button class="tag tag-button" data-search-chip="gap-section">gap-section</button>
+              </div>
+            </article>
+            <article class="foundation-card">
+              <h3>按钮和列表点击区域太小</h3>
+              <p>先保热区，再选控件高度档位。</p>
+              <div class="tag-row">
+                <button class="tag tag-button" data-search-chip="min-h-touch">min-h-touch</button>
+                <button class="tag tag-button" data-search-chip="h-control">h-control</button>
+                <button class="tag tag-button" data-search-chip="rounded-control">rounded-control</button>
+              </div>
+            </article>
+            <article class="foundation-card">
+              <h3>吸底区被 tabbar 或安全区挡住</h3>
+              <p>先做结构避让，再叠主按钮和颜色。</p>
+              <div class="tag-row">
+                <button class="tag tag-button" data-search-chip="pb-tabbar-safe">pb-tabbar-safe</button>
+                <button class="tag tag-button" data-search-chip="pb-safe">pb-safe</button>
+                <button class="tag tag-button" data-search-chip="h-tabbar">h-tabbar</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    `
+  }
+
   function renderGuidesPage() {
     return `
       <section class="section-block route-hero">
-        <div class="section-head">
-          <p class="eyebrow">Get Started</p>
-          <h2>先选接入路径，再开始搜原子。</h2>
-          <p>把“安装 / 配置 / 使用边界”拆开讲，默认只展示真正会用到的信息。</p>
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">Get Started</p>
+            <h2>这页只解决接入问题。</h2>
+            <p>先选平台，再复制最小配置和第一条命令。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">你会得到</div>
+            <strong>最小配置 + 第一条检查命令</strong>
+            <p>接入完成后，再去检索页找原子。</p>
+          </aside>
         </div>
         <div class="guide-grid">
           ${guides.map(renderGuideCard).join('')}
@@ -890,10 +1755,17 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
 
     return `
       <section class="section-block route-hero">
-        <div class="section-head">
-          <p class="eyebrow">Browse</p>
-          <h2>按分类浏览原子能力。</h2>
-          <p>适合你还不知道具体类名，但知道自己要找的是布局、控件、安全区、发丝线还是状态能力。</p>
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">Browse</p>
+            <h2>这页按能力分类浏览。</h2>
+            <p>不知道类名时，从布局、控件、安全区、发丝线和状态开始看。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">适合场景</div>
+            <strong>知道问题类型，不知道类名</strong>
+            <p>先缩小范围，再进入检索页或直接点原子。</p>
+          </aside>
         </div>
         <div class="filter-row browse-filter-row">
           <div class="filter-group">
@@ -937,10 +1809,17 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   function renderRecipesPage() {
     return `
       <section class="section-block route-hero">
-        <div class="section-head">
-          <p class="eyebrow">Recipes</p>
-          <h2>先拿到组合，再按需微调。</h2>
-          <p>这些 recipes 不是组件库，而是高频移动端场景的原子组合模板，适合直接复制后再按业务调整。</p>
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">Recipes</p>
+            <h2>这页先给可用组合。</h2>
+            <p>适合你不想从单个原子开始，想先拿到一套可靠搭配。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">适合场景</div>
+            <strong>先复制，再微调</strong>
+            <p>组合不是组件库，只是起步模板。</p>
+          </aside>
         </div>
         <div class="recipe-grid">
           ${recipes
@@ -997,13 +1876,25 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
 
     return `
       <section class="section-block route-hero">
-        <div class="section-head">
-          <p class="eyebrow">Search</p>
-          <h2>从问题开始找原子类。</h2>
-          <p>可以直接搜类名，也可以搜“底部安全区”“按钮高度”“卡片圆角”。输入 <code>intent:底部安全区</code> 时会更偏向语义匹配。</p>
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">Search</p>
+            <h2>这页只负责找原子。</h2>
+            <p>先搜问题词，再看推荐组合，最后复制类名和示例。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">最快方式</div>
+            <strong>先搜“安全区”“按钮高度”“发丝线”</strong>
+            <p>不确定类名时，先别猜 class。</p>
+          </aside>
         </div>
 
         <div class="search-panel">
+          <div class="search-steps">
+            <span>1. 先搜问题</span>
+            <span>2. 再看推荐组合</span>
+            <span>3. 最后复制原子和示例</span>
+          </div>
           <div class="search-box">
             <input id="search-input" type="search" placeholder="搜索 pb-safe / 发丝线 / 卡片，或 intent:底部安全区" value="${escapeHtml(query)}" />
             <button class="ghost-link-button" data-clear-search ${query ? '' : 'disabled'}>清空</button>
@@ -1062,7 +1953,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
           <div class="results-panel">
             ${
               visible.length > 0
-                ? visible.slice(0, 24).map((item) => renderResultCard(item, search, selected?.id === item.id)).join('')
+                ? visible.map((item) => renderResultCard(item, search, selected?.id === item.id)).join('')
                 : emptyState
             }
           </div>
@@ -1081,7 +1972,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                     ${selected.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                   </div>
                   <div class="detail-block">
-                    <div class="mini-heading">它解决什么问题</div>
+                    <div class="mini-heading">作用</div>
                     <p>${highlight(selected.intent, search.highlightQuery)}</p>
                   </div>
                   <div class="detail-block">
@@ -1089,8 +1980,31 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                     <p>${highlight(selected.whenToUse, search.highlightQuery)}</p>
                   </div>
                   <div class="detail-block">
-                    <div class="mini-heading">怎么组合</div>
+                    <div class="mini-heading">如何使用</div>
+                    ${renderDetailList(getUsageSteps(selected))}
+                  </div>
+                  ${
+                    getSizingNotes(selected)
+                      ? `
+                        <div class="detail-block">
+                          <div class="mini-heading">尺寸与设计基准</div>
+                          ${renderDetailList(getSizingNotes(selected) ?? [])}
+                        </div>
+                      `
+                      : ''
+                  }
+                  <div class="detail-block">
+                    <div class="mini-heading">推荐搭配</div>
                     <p>${escapeHtml(getCompositionSuggestion(selected))}</p>
+                    <div class="tag-row detail-tag-row">
+                      ${getRelatedClassNames(selected)
+                        .map((className) => `<button class="tag tag-button" data-search-chip="${escapeHtml(className)}">${escapeHtml(className)}</button>`)
+                        .join('')}
+                    </div>
+                  </div>
+                  <div class="detail-block">
+                    <div class="mini-heading">视觉预览</div>
+                    ${renderUtilityPreview(selected)}
                   </div>
                   <div class="detail-block">
                     <div class="mini-heading">输出语义</div>
@@ -1116,10 +2030,17 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   function renderFaqPage() {
     return `
       <section class="section-block route-hero">
-        <div class="section-head">
-          <p class="eyebrow">FAQ</p>
-          <h2>常见问题一次说明白。</h2>
-          <p>把支持边界、平台定位、产物输出和排查建议放到一处，减少重复解释。</p>
+        <div class="route-hero-shell">
+          <div class="section-head route-head">
+            <p class="eyebrow">FAQ</p>
+            <h2>这页集中看边界和排查。</h2>
+            <p>支持什么，不支持什么，遇到问题先查这里。</p>
+          </div>
+          <aside class="route-aside">
+            <div class="summary-title">优先阅读</div>
+            <strong>平台边界、输出策略、搜索不到结果时怎么办</strong>
+            <p>先看这里，再回到具体页面操作。</p>
+          </aside>
         </div>
         <div class="faq-list">
           ${renderFaqList()}
@@ -1129,6 +2050,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   }
 
   function renderPage() {
+    if (route === 'foundations') return renderFoundationsPage()
     if (route === 'guides') return renderGuidesPage()
     if (route === 'browse') return renderBrowsePage()
     if (route === 'recipes') return renderRecipesPage()
@@ -1191,6 +2113,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   }
 
   function render() {
+    let focusSnapshot = captureInputFocusSnapshot()
     let search = createSearchContext(query)
     let visible = filterItems(search)
     if (!items.some((item) => item.id === selectedId)) {
@@ -1210,7 +2133,6 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         <header class="topbar">
           <div class="topbar-brand">
             <button class="brand-mark brand-button" data-route="overview">TimCSS</button>
-            <span class="brand-note">移动端与微信小程序原子样式文档</span>
           </div>
           <button class="topbar-menu" data-open-drawer>导航</button>
           <nav class="topbar-nav">
@@ -1227,10 +2149,11 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
             <div class="footer-card">
               <h2>继续阅读</h2>
               <div class="footer-links">
-                <span><code>docs/start-here.md</code>：先看产品定位</span>
-                <span><code>docs/integration-h5.md</code>：H5 接入</span>
-                <span><code>docs/integration-wechat-miniapp.md</code>：微信小程序接入</span>
-                <span><code>docs/faq.md</code>：FAQ 文档</span>
+                <button class="footer-link-card" data-route="foundations"><strong>尺寸基础</strong><span>先看移动端留白、触控、导航和安全区的尺寸规则。</span></button>
+                <button class="footer-link-card" data-route="guides"><strong>开始使用</strong><span>先看 H5、微信小程序和 Taro / uni-app 的接入路径。</span></button>
+                <button class="footer-link-card" data-route="catalog"><strong>原子检索</strong><span>按问题、意图和类名搜索，并直接复制最小示例。</span></button>
+                <button class="footer-link-card" data-route="recipes"><strong>常用组合</strong><span>先拿高频移动端组合，再按业务微调。</span></button>
+                <button class="footer-link-card" data-route="faq"><strong>FAQ</strong><span>集中看支持边界、默认行为和排查建议。</span></button>
               </div>
             </div>
           </section>
@@ -1251,7 +2174,11 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       paletteQuery = (event.target as HTMLInputElement).value
       render()
     })
-    paletteInput?.focus()
+    if (focusSnapshot) {
+      restoreInputFocusSnapshot(app, focusSnapshot)
+    } else if (paletteOpen) {
+      paletteInput?.focus()
+    }
 
     paletteInput?.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter') return
@@ -1401,6 +2328,10 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   }
 
   window.addEventListener('hashchange', () => {
+    if (ignoreNextHashChange) {
+      ignoreNextHashChange = false
+      return
+    }
     let state = getHashState()
     route = state.route
     query = state.query
