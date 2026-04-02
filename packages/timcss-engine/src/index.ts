@@ -243,11 +243,24 @@ function removeCandidatePrefix(value: string, prefix?: string) {
   return value.startsWith(withDash) ? value.slice(withDash.length) : value
 }
 
-function resolveCatalogMatchesForCandidate(candidate: string, byClass: Map<string, TimcssCatalogItem>) {
+function matchesCatalogClassName(item: TimcssCatalogItem, candidate: string) {
+  if (item.className === candidate) return true
+  if (!item.modifiers?.length) return false
+  return candidate.startsWith(`${item.className}/`) && item.modifiers.includes(candidate.slice(item.className.length + 1))
+}
+
+function resolveCatalogMatchesForCandidate(
+  candidate: string,
+  byClass: Map<string, TimcssCatalogItem>,
+  itemsWithModifiers: TimcssCatalogItem[],
+) {
   let parts = candidate.split(':')
   let resolved: TimcssCatalogItem[] = []
 
   if (byClass.has(candidate)) resolved.push(byClass.get(candidate)!)
+  for (let item of itemsWithModifiers) {
+    if (matchesCatalogClassName(item, candidate)) resolved.push(item)
+  }
 
   if (parts.length > 1) {
     for (let i = 0; i < parts.length - 1; i++) {
@@ -256,6 +269,9 @@ function resolveCatalogMatchesForCandidate(candidate: string, byClass: Map<strin
     }
     let utilityName = parts[parts.length - 1]
     if (byClass.has(utilityName)) resolved.push(byClass.get(utilityName)!)
+    for (let item of itemsWithModifiers) {
+      if (matchesCatalogClassName(item, utilityName)) resolved.push(item)
+    }
   }
 
   return resolved
@@ -267,11 +283,12 @@ function resolveCandidateCatalogMatches(
   prefix?: string,
 ): TimcssCandidateCatalogMatch[] {
   let byClass = new Map(items.map((item) => [item.className, item]))
+  let itemsWithModifiers = items.filter((item) => item.modifiers?.length)
   let matches: TimcssCandidateCatalogMatch[] = []
 
   for (let candidate of candidates) {
     let resolved: TimcssCatalogItem[] = []
-    resolved.push(...resolveCatalogMatchesForCandidate(candidate, byClass))
+    resolved.push(...resolveCatalogMatchesForCandidate(candidate, byClass, itemsWithModifiers))
 
     let normalized = candidate
       .split(':')
@@ -279,7 +296,7 @@ function resolveCandidateCatalogMatches(
       .map((segment) => removeCandidatePrefix(segment, prefix))
       .join(':')
     if (normalized !== candidate) {
-      resolved.push(...resolveCatalogMatchesForCandidate(normalized, byClass))
+      resolved.push(...resolveCatalogMatchesForCandidate(normalized, byClass, itemsWithModifiers))
     }
 
     let seen = new Set<string>()
@@ -345,7 +362,7 @@ export function filterCatalogItems(
 
   let query = options.query?.toLowerCase().trim()
   let filtered = items.filter((item) => {
-    if (options.className && item.className !== options.className) return false
+    if (options.className && !matchesCatalogClassName(item, options.className)) return false
     if (options.platform && !item.platforms.includes(options.platform as any)) return false
     if (options.status && item.status !== options.status) return false
     if (options.kind && item.kind !== options.kind) return false
@@ -360,6 +377,7 @@ export function filterCatalogItems(
         item.whenToUse,
         item.category,
         item.sourcePackage,
+        ...(item.modifiers ?? []),
         ...item.platforms,
       ]
         .join(' ')

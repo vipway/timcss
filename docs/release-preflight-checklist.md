@@ -20,6 +20,7 @@
 pnpm install
 pnpm run timcss:prepare
 pnpm run timcss:release:validate
+pnpm run timcss:docs:audit
 pnpm run timcss:benchmark:strict
 pnpm run timcss:typecheck
 pnpm run timcss:scanner:baseline
@@ -36,6 +37,7 @@ pnpm run timcss:release:smoke
 - [ ] scanner baseline 漏扫率为 0
 - [ ] benchmark strict 模式通过（性能与检索命中达标）
 - [ ] 外部 release smoke 项目可安装并完成 inspect/build
+- [ ] docs 索引与官方 Tailwind utility 清单一致
 
 ## 三、测试
 

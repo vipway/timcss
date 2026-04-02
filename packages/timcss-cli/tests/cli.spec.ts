@@ -425,3 +425,40 @@ test('catalog supports intent query from CLI', () => {
   expect(Array.isArray(json.payload.items)).toBe(true)
   expect(json.payload.items.some((item: { className: string }) => item.className === 'pb-safe' || item.className === 'pb-tabbar-safe')).toBe(true)
 })
+
+test('catalog returns Tailwind core spacing utilities from docs index', () => {
+  let result = runCli(['catalog', '--class', 'px-4', '--json'])
+  expect(result.status).toBe(0)
+  let json = JSON.parse(result.stdout)
+  expect(json.command).toBe('catalog')
+  expect(json.payload.count).toBe(1)
+  expect(json.payload.items[0].className).toBe('px-4')
+  expect(json.payload.items[0].category).toBe('core-spacing')
+  expect(json.payload.items[0].sourcePackage).toBe('tailwindcss')
+})
+
+test('catalog returns Tailwind negative spacing utilities from docs index', () => {
+  let result = runCli(['catalog', '--class', '-m-4', '--json'])
+  expect(result.status).toBe(0)
+  let json = JSON.parse(result.stdout)
+  expect(json.command).toBe('catalog')
+  expect(json.payload.count).toBe(1)
+  expect(json.payload.items[0].className).toBe('-m-4')
+  expect(json.payload.items[0].category).toBe('core-spacing')
+  expect(json.payload.items[0].sourcePackage).toBe('tailwindcss')
+})
+
+test('catalog resolves Tailwind modifier utility queries against official base item', () => {
+  let result = runCli(['catalog', '--class', 'bg-blue-500/50', '--json'])
+  expect(result.status).toBe(0)
+  let json = JSON.parse(result.stdout)
+  expect(json.payload.count).toBe(1)
+  expect(json.payload.items[0].className).toBe('bg-blue-500')
+  expect(json.payload.items[0].modifiers).toContain('50')
+})
+
+test('docs audit stays in sync with official Tailwind utility metadata', () => {
+  let result = runNodeCommand(process.execPath, [path.join(workspaceRoot, 'scripts', 'timcss-docs-audit.mjs')])
+  expect(result.status).toBe(0)
+  expect(result.stdout).toContain('[timcss-docs-audit] ok')
+})

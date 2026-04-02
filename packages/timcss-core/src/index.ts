@@ -65,6 +65,7 @@ export interface TimcssCatalogItem {
   intent: string
   output: string
   whenToUse: string
+  modifiers?: string[]
   platforms: TimcssPlatform[]
   sourcePackage: string
   status: TimcssCatalogItemStatus

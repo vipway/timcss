@@ -39,4 +39,5 @@
 
 ```bash
 pnpm run timcss:docs:generate
+pnpm run timcss:docs:audit
 ```

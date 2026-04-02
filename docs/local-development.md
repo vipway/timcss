@@ -14,6 +14,7 @@
 pnpm install
 pnpm run timcss:prepare
 pnpm run timcss:docs:generate
+pnpm run timcss:docs:audit
 ```
 
 ## 第一次跑通
@@ -31,6 +32,7 @@ pnpm run timcss:docs:build
 - 发布校验通过
 - 微信示例 `inspect` 返回 `0 diagnostics`
 - docs 站可以成功构建
+- docs 索引与官方 Tailwind utility 清单一致
 
 ## 日常开发
 

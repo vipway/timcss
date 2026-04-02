@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { pathExists, readJson } from './_shared/fs.mjs'
+import { auditOfficialTailwindCatalog } from './_shared/timcss-docs-audit.mjs'
 
 const root = process.cwd()
 
@@ -50,6 +51,7 @@ const requiredRootScripts = [
   'timcss:print-entry',
   'timcss:catalog',
   'timcss:docs:generate',
+  'timcss:docs:audit',
   'timcss:docs:build',
   'timcss:benchmark',
   'timcss:benchmark:strict',
@@ -94,6 +96,11 @@ const rootScriptContracts = [
   {
     name: 'timcss:scanner:baseline',
     include: ['timcss-scanner-baseline.mjs'],
+    exclude: [],
+  },
+  {
+    name: 'timcss:docs:audit',
+    include: ['timcss-docs-audit.mjs'],
     exclude: [],
   },
   {
@@ -197,6 +204,34 @@ async function validateDocs() {
     for (let item of catalog.items ?? []) {
       for (let key of ['id', 'className', 'kind', 'platforms', 'sourcePackage', 'status', 'since']) {
         if (!(key in item)) issues.push(`Catalog item missing ${key}: ${item.className ?? '(unknown)'}`)
+      }
+    }
+
+    if (Array.isArray(catalog.items) && catalog.items.length > 0) {
+      let audit = await auditOfficialTailwindCatalog(root, catalog.items)
+      if (audit.docsOfficialCount !== audit.officialCount) {
+        issues.push(
+          `Catalog official utility count mismatch: docs=${audit.docsOfficialCount}, tailwind=${audit.officialCount}`,
+        )
+      }
+      if (audit.missing.length > 0) {
+        issues.push(
+          `Catalog is missing official Tailwind utilities: ${audit.missing.slice(0, 12).join(', ')}${audit.missing.length > 12 ? ' ...' : ''}`,
+        )
+      }
+      if (audit.extra.length > 0) {
+        issues.push(
+          `Catalog contains unknown extra Tailwind utilities: ${audit.extra.slice(0, 12).join(', ')}${audit.extra.length > 12 ? ' ...' : ''}`,
+        )
+      }
+      if (audit.modifierMismatches.length > 0) {
+        let sample = audit.modifierMismatches
+          .slice(0, 6)
+          .map((entry) => `${entry.className} (docs=${entry.docs.length}, tailwind=${entry.official.length})`)
+          .join(', ')
+        issues.push(
+          `Catalog modifier coverage mismatches official Tailwind metadata: ${sample}${audit.modifierMismatches.length > 6 ? ' ...' : ''}`,
+        )
       }
     }
   }

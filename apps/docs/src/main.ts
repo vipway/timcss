@@ -7,7 +7,6 @@ import {
   splitTimcssSearchTerms,
 } from '../../../packages/timcss-core/src/search'
 import { createMobileTokens } from '../../../packages/timcss-tokens/src'
-import docIndex from '../../../docs/atomic-utilities-index.json'
 
 type StatusTag = 'stable' | 'experimental'
 type PlatformTag = 'mobile' | 'wechat-miniprogram'
@@ -22,6 +21,7 @@ type UtilityItem = {
   intent: string
   output: string
   whenToUse: string
+  modifiers?: string[]
   platforms: PlatformTag[]
   sourcePackage: string
   status: StatusTag
@@ -40,6 +40,13 @@ type DocItem = UtilityItem & {
   tags: string[]
   description: string
   example: string
+  searchClassName: string
+  searchIntent: string
+  searchWhenToUse: string
+  searchOutput: string
+  searchDescription: string
+  searchTags: string[]
+  searchModifiers: string[]
 }
 
 type SearchContext = {
@@ -54,15 +61,6 @@ type InputFocusSnapshot = {
   id: 'search-input' | 'palette-input'
   selectionStart: number | null
   selectionEnd: number | null
-}
-
-type Recipe = {
-  id: string
-  title: string
-  description: string
-  queryHints: string[]
-  classes: string[]
-  platforms: Array<PlatformTag | 'all'>
 }
 
 type Guide = {
@@ -111,7 +109,26 @@ type FoundationScale = {
   classes: string[]
 }
 
-const staleIndexThresholdMs = 7 * 24 * 60 * 60 * 1000
+type PreviewDensity = 'compact' | 'comfortable' | 'spacious'
+type PreviewMode = 'single' | 'compare'
+type PreviewState = {
+  density: PreviewDensity
+  context: PlatformTag
+  mode: PreviewMode
+}
+
+type CatalogViewState = {
+  visible: DocItem[]
+  rendered: DocItem[]
+  selected: DocItem | null
+  total: number
+  renderedCount: number
+  hasMore: boolean
+  search: SearchContext
+}
+
+const INITIAL_RESULTS_RENDER_LIMIT = 120
+const RESULTS_RENDER_STEP = 120
 let ignoreNextHashChange = false
 
 const categoryOrder = [
@@ -123,6 +140,13 @@ const categoryOrder = [
   'wechat-safe-area',
   'wechat-hairline',
   'variant',
+  'core-spacing',
+  'core-sizing',
+  'core-layout',
+  'core-typography',
+  'core-color',
+  'core-shape',
+  'core-effect',
 ] as const
 
 const categoryLabels: Record<string, string> = {
@@ -135,6 +159,13 @@ const categoryLabels: Record<string, string> = {
   'wechat-safe-area': '安全区',
   'wechat-hairline': '发丝线',
   variant: '状态',
+  'core-spacing': '核心间距',
+  'core-sizing': '核心尺寸',
+  'core-layout': '核心布局',
+  'core-typography': '核心排版',
+  'core-color': '核心颜色',
+  'core-shape': '核心边框圆角',
+  'core-effect': '核心效果',
 }
 
 const platformLabels: Record<string, string> = {
@@ -152,34 +183,29 @@ const routeLabels: Record<RouteId, string> = {
   catalog: '原子检索',
   faq: 'FAQ',
 }
-const routeOrder: RouteId[] = ['overview', 'foundations', 'guides', 'browse', 'recipes', 'catalog', 'faq']
+const primaryRouteOrder: RouteId[] = ['overview', 'foundations', 'catalog', 'guides']
+const primaryNavRoutes: RouteId[] = ['foundations', 'catalog', 'guides']
 
-const quickSearches = ['底部安全区 吸底', '按钮高度 触控', '卡片圆角 阴影', '发丝线 分隔', 'pressed:']
+const quickSearches = ['底部安全区 吸底', '按钮高度 触控', '卡片圆角 阴影', 'px-4', 'w-full', 'bg-blue-500', 'pressed:']
 
 const overviewPaths: OverviewPath[] = [
   {
     title: '先看尺寸体系',
-    summary: '先理解页面留白、模块节奏、触控高度和安全区，再选原子，整体会更稳。',
+    summary: '先统一留白、节奏、控件高和安全区，再选原子。',
     route: 'foundations',
     actionLabel: '查看尺寸规则',
   },
   {
-    title: '第一次接入',
-    summary: '先看平台边界、最小配置和第一条验证命令，再决定进入哪条集成路径。',
-    route: 'guides',
-    actionLabel: '查看接入方式',
-  },
-  {
     title: '直接查原子',
-    summary: '按问题、意图和类名搜索，适合已经知道自己要解决什么布局或交互问题。',
+    summary: '按问题词或类名直接查作用、用法和示例。',
     route: 'catalog',
     actionLabel: '开始检索',
   },
   {
-    title: '先拿组合',
-    summary: '如果你还不想从单个原子开始，可以先复制高频移动端组合，再按业务微调。',
-    route: 'recipes',
-    actionLabel: '查看常用组合',
+    title: '第一次接入',
+    summary: '先看最小配置和平台边界，再开始接入。',
+    route: 'guides',
+    actionLabel: '查看接入方式',
   },
 ]
 
@@ -226,6 +252,27 @@ const foundationScales: FoundationScale[] = [
   },
 ]
 
+function readPrimaryCssValue(output: string) {
+  return output.match(/:\s*([^;]+);?/)?.[1]?.trim() ?? null
+}
+
+function getClassScaleToken(className: string) {
+  let match = className.match(/^-?[a-z-]+-([a-zA-Z0-9./]+)$/)
+  return match?.[1] ?? null
+}
+
+function isCoreCategory(item: UtilityItem | DocItem) {
+  return item.category.startsWith('core-') || item.sourcePackage === 'tailwindcss'
+}
+
+function countOfficialUtilities(items: UtilityItem[] | DocItem[]) {
+  return items.filter((item) => isCoreCategory(item)).length
+}
+
+function startsWithAny(value: string, prefixes: string[]) {
+  return prefixes.some((prefix) => value.startsWith(prefix))
+}
+
 function convertRpxToPreviewPx(value: string, factor = 0.5) {
   return value.replace(/(-?\d*\.?\d+)rpx/g, (_, num) => `${Number(num) * factor}px`)
 }
@@ -236,65 +283,38 @@ function toStyleAttribute(style: Record<string, string>) {
     .join(';')
 }
 
-const previewThemeStyle = toStyleAttribute({
-  '--preview-page': convertRpxToPreviewPx(comfortableTokens.layout.page),
-  '--preview-section': convertRpxToPreviewPx(comfortableTokens.layout.section),
-  '--preview-card-padding': convertRpxToPreviewPx(comfortableTokens.layout.card),
-  '--preview-touch': convertRpxToPreviewPx(comfortableTokens.layout.touch),
-  '--preview-nav': convertRpxToPreviewPx(comfortableTokens.layout.nav),
-  '--preview-tabbar': convertRpxToPreviewPx(comfortableTokens.layout.tabbar),
-  '--preview-control-xs': convertRpxToPreviewPx(comfortableTokens.controlHeight.xs),
-  '--preview-control-sm': convertRpxToPreviewPx(comfortableTokens.controlHeight.sm),
-  '--preview-control-md': convertRpxToPreviewPx(comfortableTokens.controlHeight.md),
-  '--preview-control-lg': convertRpxToPreviewPx(comfortableTokens.controlHeight.lg),
-  '--preview-control-xl': convertRpxToPreviewPx(comfortableTokens.controlHeight.xl),
-  '--preview-radius-card': convertRpxToPreviewPx(comfortableTokens.radius.lg),
-  '--preview-radius-control': convertRpxToPreviewPx(comfortableTokens.radius.md),
-  '--preview-border': comfortableTokens.colors.border,
-  '--preview-primary': comfortableTokens.colors.primary,
-  '--preview-surface': comfortableTokens.colors.surface,
-  '--preview-background': comfortableTokens.colors.background,
-  '--preview-text': comfortableTokens.colors.text,
-  '--preview-muted': comfortableTokens.colors.muted,
-  '--preview-on-primary': comfortableTokens.colors['on-primary'],
-  '--preview-shadow-card': convertRpxToPreviewPx(comfortableTokens.shadows.card),
-  '--preview-shadow-elevated': convertRpxToPreviewPx(comfortableTokens.shadows.elevated),
-})
-
-const recipes: Recipe[] = [
-  {
-    id: 'bottom-action',
-    title: '吸底主操作区',
-    description: '底部按钮区避免被 tabbar 和安全区遮挡。',
-    queryHints: ['底部安全区', '吸底', 'tabbar', '底部按钮'],
-    classes: ['pb-tabbar-safe', 'h-control', 'rounded-control', 'bg-primary', 'text-on-primary'],
-    platforms: ['wechat-miniprogram'],
-  },
-  {
-    id: 'card-surface',
-    title: '卡片信息区',
-    description: '列表卡片、摘要面板、信息块的默认组合。',
-    queryHints: ['卡片', '圆角', '阴影', '信息块'],
-    classes: ['p-card', 'rounded-card', 'bg-surface', 'shadow-card', 'text-primary'],
-    platforms: ['all'],
-  },
-  {
-    id: 'touch-control',
-    title: '高可点按控件',
-    description: '保证按钮和点击行拥有一致的高度、圆角和反馈。',
-    queryHints: ['按钮高度', '触控', '交互', '点击'],
-    classes: ['h-control', 'min-h-touch', 'rounded-control', 'pressed:opacity-80'],
-    platforms: ['all'],
-  },
-  {
-    id: 'wechat-divider',
-    title: '小程序分隔列表',
-    description: '适合微信小程序列表分隔、浅边框和轻层级。',
-    queryHints: ['发丝线', '分隔', '边框', '列表'],
-    classes: ['hairline-b', 'px-page', 'py-section', 'text-muted'],
-    platforms: ['wechat-miniprogram'],
-  },
-]
+function buildPreviewThemeStyle(density: PreviewDensity) {
+  let tokens =
+    density === 'compact'
+      ? compactTokens
+      : density === 'spacious'
+        ? spaciousTokens
+        : comfortableTokens
+  return toStyleAttribute({
+    '--preview-page': convertRpxToPreviewPx(tokens.layout.page),
+    '--preview-section': convertRpxToPreviewPx(tokens.layout.section),
+    '--preview-card-padding': convertRpxToPreviewPx(tokens.layout.card),
+    '--preview-touch': convertRpxToPreviewPx(tokens.layout.touch),
+    '--preview-nav': convertRpxToPreviewPx(tokens.layout.nav),
+    '--preview-tabbar': convertRpxToPreviewPx(tokens.layout.tabbar),
+    '--preview-control-xs': convertRpxToPreviewPx(tokens.controlHeight.xs),
+    '--preview-control-sm': convertRpxToPreviewPx(tokens.controlHeight.sm),
+    '--preview-control-md': convertRpxToPreviewPx(tokens.controlHeight.md),
+    '--preview-control-lg': convertRpxToPreviewPx(tokens.controlHeight.lg),
+    '--preview-control-xl': convertRpxToPreviewPx(tokens.controlHeight.xl),
+    '--preview-radius-card': convertRpxToPreviewPx(tokens.radius.lg),
+    '--preview-radius-control': convertRpxToPreviewPx(tokens.radius.md),
+    '--preview-border': tokens.colors.border,
+    '--preview-primary': tokens.colors.primary,
+    '--preview-surface': tokens.colors.surface,
+    '--preview-background': tokens.colors.background,
+    '--preview-text': tokens.colors.text,
+    '--preview-muted': tokens.colors.muted,
+    '--preview-on-primary': tokens.colors['on-primary'],
+    '--preview-shadow-card': convertRpxToPreviewPx(tokens.shadows.card),
+    '--preview-shadow-elevated': convertRpxToPreviewPx(tokens.shadows.elevated),
+  })
+}
 
 const guides: Guide[] = [
   {
@@ -407,12 +427,17 @@ function deriveTags(item: UtilityItem) {
   if (item.platforms.includes('mobile')) tags.add('H5')
   if (item.platforms.includes('wechat-miniprogram')) tags.add('小程序')
   if (item.status === 'experimental') tags.add('实验')
+  if (isCoreCategory(item)) tags.add('Tailwind Core')
+  if (item.modifiers?.length) tags.add('支持 /modifier')
   return [...tags]
 }
 
 function deriveDescription(item: UtilityItem) {
   if (item.kind === 'variant') {
     return `${item.className} 用于给原子类增加状态上下文，适合和 opacity、translate、safe-area、spacing 一起组合。`
+  }
+  if (isCoreCategory(item)) {
+    return `${item.className} 是 Tailwind 官方全量 utility 文档中的核心原子，用于${item.intent}。${item.modifiers?.length ? '它还支持 /modifier 形式。' : ''}适合在 TimCSS 语义原子之外做局部尺寸、布局和视觉微调。`
   }
   return `${item.className} 用于${item.intent}，强调单一职责，适合与布局、颜色、形状、状态原子自由组合。`
 }
@@ -439,15 +464,56 @@ function deriveExample(item: UtilityItem) {
     'disabled:': `<button class="h-control px-page rounded-control bg-primary text-on-primary disabled:opacity-40">不可用</button>`,
   }
 
-  return examples[item.className] ?? `<view class="${item.className}">示例</view>`
+  if (examples[item.className]) return examples[item.className]
+
+  if (item.category === 'core-spacing') {
+    return `<view class="${item.className} bg-surface rounded-card">间距示例</view>`
+  }
+  if (item.category === 'core-sizing') {
+    return `<view class="${item.className} bg-primary rounded-control"></view>`
+  }
+  if (item.category === 'core-layout') {
+    if (startsWithAny(item.className, ['flex', 'items-', 'justify-', 'grow', 'shrink'])) {
+      return `<view class="flex items-center justify-between gap-4"><view>左侧</view><view>右侧</view></view>`
+    }
+    if (item.className.startsWith('grid')) {
+      return `<view class="grid grid-cols-2 gap-4"><view>一</view><view>二</view></view>`
+    }
+    return `<view class="${item.className}">布局示例</view>`
+  }
+  if (item.category === 'core-typography') {
+    return `<text class="${item.className}">排版示例文本</text>`
+  }
+  if (item.category === 'core-color') {
+    if (item.className.startsWith('text-')) return `<text class="${item.className}">颜色示例</text>`
+    return `<view class="p-card rounded-card ${item.className}">颜色示例</view>`
+  }
+  if (item.category === 'core-shape') {
+    return `<view class="bg-surface p-card ${item.className}">边框与圆角示例</view>`
+  }
+  if (item.category === 'core-effect') {
+    return `<view class="bg-surface p-card rounded-card ${item.className}">效果示例</view>`
+  }
+
+  return `<view class="${item.className}">示例</view>`
 }
 
 function toDocItem(item: UtilityItem): DocItem {
+  let tags = deriveTags(item)
+  let description = deriveDescription(item)
+  let example = deriveExample(item)
   return {
     ...item,
-    tags: deriveTags(item),
-    description: deriveDescription(item),
-    example: deriveExample(item),
+    tags,
+    description,
+    example,
+    searchClassName: item.className.toLowerCase(),
+    searchIntent: item.intent.toLowerCase(),
+    searchWhenToUse: item.whenToUse.toLowerCase(),
+    searchOutput: item.output.toLowerCase(),
+    searchDescription: description.toLowerCase(),
+    searchTags: tags.map((tag) => tag.toLowerCase()),
+    searchModifiers: (item.modifiers ?? []).map((modifier) => modifier.toLowerCase()),
   }
 }
 
@@ -485,6 +551,30 @@ function getRelatedClassNames(item: DocItem) {
     related.push('px-page', 'pb-safe', 'pb-tabbar-safe', 'pt-safe', 'pt-nav-safe')
   } else if (item.category === 'wechat-hairline') {
     related.push('bg-surface', 'px-page')
+  } else if (item.category === 'core-spacing') {
+    related.push('px-4', 'py-4', 'gap-4')
+    if (item.className.startsWith('px-')) related.push('px-page', 'py-4', 'gap-4')
+    if (item.className.startsWith('p-')) related.push('rounded-card', 'bg-surface')
+    if (item.className.startsWith('m') || item.className.startsWith('-m')) related.push('gap-4', 'my-4')
+    if (item.className.startsWith('gap')) related.push('flex', 'flex-col', 'grid')
+  } else if (item.category === 'core-sizing') {
+    related.push('w-full', 'h-control', 'min-h-touch')
+    if (item.className.startsWith('w-') || item.className.startsWith('max-w-')) related.push('px-page', 'rounded-card')
+    if (item.className.startsWith('h-') || item.className.startsWith('min-h-')) related.push('h-control', 'min-h-touch')
+  } else if (item.category === 'core-layout') {
+    related.push('flex', 'items-center', 'justify-between', 'gap-4')
+    if (item.className.startsWith('grid')) related.push('grid', 'grid-cols-2', 'gap-4')
+    if (startsWithAny(item.className, ['top-', 'right-', 'bottom-', 'left-', 'inset'])) related.push('absolute', 'relative')
+  } else if (item.category === 'core-typography') {
+    related.push('text-base', 'leading-6', 'font-medium', 'text-primary')
+  } else if (item.category === 'core-color') {
+    related.push('bg-surface', 'text-primary', 'border-default')
+    if (item.className.startsWith('bg-')) related.push('text-white', 'rounded-card')
+    if (item.className.startsWith('border-')) related.push('border', 'rounded-md')
+  } else if (item.category === 'core-shape') {
+    related.push('rounded-md', 'border', 'shadow-sm')
+  } else if (item.category === 'core-effect') {
+    related.push('shadow-card', 'opacity-80', 'rounded-card')
   }
 
   return [...new Set(related)].filter((className) => className !== item.className)
@@ -536,6 +626,62 @@ function getUsageSteps(item: DocItem) {
 
   if (item.category === 'wechat-hairline') {
     return ['优先用于浅分隔和边界，不要承担强视觉边框。', '列表里通常只保留一侧 hairline，避免多边重复发灰。', '与 bg-surface 配合时层级最自然。']
+  }
+
+  if (item.category === 'core-spacing') {
+    return [
+      '先区分这是页面级留白、组件内距，还是布局之间的节奏。',
+      '整页主留白优先用 px-page、py-section；这组核心原子更适合做局部微调。',
+      '列表和按钮组优先用 gap 建节奏，margin 只在对齐修正时少量补。',
+    ]
+  }
+
+  if (item.category === 'core-sizing') {
+    return [
+      '先确定这是结构尺寸还是交互尺寸，再决定用通用 core 原子还是 TimCSS 语义尺寸。',
+      '宽高类适合图片、块容器、面板和自定义组件；交互控件优先 h-control / min-h-touch。',
+      '移动端尽量减少尺寸档位，避免同页出现太多宽高尺度。',
+    ]
+  }
+
+  if (item.category === 'core-layout') {
+    return [
+      '先定布局方式，再叠加间距、尺寸和颜色。',
+      '横向排列通常从 flex + items-center + gap-* 起步；宫格通常从 grid + grid-cols-* 起步。',
+      '定位类只负责结构位置，不要把安全区和交互尺寸混在同一层处理。',
+    ]
+  }
+
+  if (item.category === 'core-typography') {
+    return [
+      '先控制字号和行高，再决定字重和颜色。',
+      '移动端正文尽量保持少量稳定字号，标题层级也不要开太多档。',
+      '如果是系统级文案规范，优先先定一套角色，再用原子执行。',
+    ]
+  }
+
+  if (item.category === 'core-color') {
+    return [
+      '局部试色或业务例外可以直接用核心颜色；全局主题和产品语义优先沉淀为 TimCSS 语义原子。',
+      '同一界面先确定主色、表面层和文本层，再决定具体色阶。',
+      '色彩不要单独承担信息表达，状态和禁用最好配合文案、图标或透明度一起使用。',
+    ]
+  }
+
+  if (item.category === 'core-shape') {
+    return [
+      '边框和圆角主要负责轮廓表达，不要和阴影一起堆得太重。',
+      '按钮、卡片、图片容器最好各自保持稳定档位，不要一屏里圆角风格太杂。',
+      '浅边框适合信息组织，强调边框要节制使用。',
+    ]
+  }
+
+  if (item.category === 'core-effect') {
+    return [
+      '阴影和透明度都属于层级和状态表达，不要替代真正的布局与语义。',
+      '信息卡优先轻阴影，浮层再用更强层级。',
+      '透明度适合反馈和弱化，不建议当作唯一的禁用设计手段。',
+    ]
   }
 
   return ['先用它解决一个问题，再叠加其他原子。', '保持布局、尺寸、颜色、状态分层组合。', '如果需要更完整的起步结构，先去常用组合页复制。']
@@ -594,6 +740,39 @@ function getSizingNotes(item: DocItem) {
     return ['安全区原子不是视觉尺寸规范，而是结构避让规范。', '顶部场景优先 pt-safe / pt-nav-safe，底部场景优先 pb-safe / pb-tabbar-safe。']
   }
 
+  let primaryValue = readPrimaryCssValue(item.output)
+  let scaleToken = getClassScaleToken(item.className)
+
+  if (item.category === 'core-spacing' && primaryValue) {
+    return [
+      `${item.className} 当前输出值是 ${primaryValue}。`,
+      scaleToken ? `这组类名里的 ${scaleToken} 来自 Tailwind 默认 spacing 尺度，默认基于 rem 体系。` : '这组类名来自 Tailwind 默认 spacing 尺度，默认基于 rem 体系。',
+      '移动端页面主留白建议优先使用 TimCSS 的语义尺寸；核心 spacing 更适合卡片、按钮组和局部结构微调。',
+    ]
+  }
+
+  if (item.category === 'core-sizing' && primaryValue) {
+    return [
+      `${item.className} 当前输出值是 ${primaryValue}。`,
+      '如果这是交互控件高度，优先先对照 h-control / min-h-touch 再决定是否直接写核心尺寸。',
+      '结构尺寸要服务于层级和可点击性，不要只追求视觉紧凑。',
+    ]
+  }
+
+  if (item.category === 'core-typography' && primaryValue) {
+    return [
+      `${item.className} 当前主值是 ${primaryValue}。`,
+      '移动端排版建议控制在少量稳定字号和行高之内，避免每个模块都写出不同尺度。',
+    ]
+  }
+
+  if (item.category === 'core-shape' && primaryValue) {
+    return [
+      `${item.className} 当前主值是 ${primaryValue}。`,
+      '边框和圆角最好跟随组件层级统一，不建议同页出现过多边框粗细和圆角档位。',
+    ]
+  }
+
   return notes[item.className] ?? null
 }
 
@@ -601,9 +780,28 @@ function renderDetailList(items: string[]) {
   return `<ul class="detail-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
 }
 
-function renderPreviewShell(body: string, note: string) {
+function renderPreviewPane(label: string, body: string) {
   return `
-    <div class="preview-card" style="${escapeHtml(previewThemeStyle)}">
+    <div class="preview-pane">
+      <div class="summary-title">${escapeHtml(label)}</div>
+      ${body}
+    </div>
+  `
+}
+
+function renderPreviewCompare(before: string, after: string) {
+  return `<div class="preview-compare-grid">${renderPreviewPane('调整前', before)}${renderPreviewPane('调整后', after)}</div>`
+}
+
+function renderPreviewShell(body: string, note: string, preview: PreviewState) {
+  let contextLabel = preview.context === 'wechat-miniprogram' ? '微信小程序上下文' : 'H5 上下文'
+  return `
+    <div class="preview-card" style="${escapeHtml(buildPreviewThemeStyle(preview.density))}">
+      <div class="preview-meta">
+        <span class="tag">${escapeHtml(preview.density)}</span>
+        <span class="tag">${escapeHtml(contextLabel)}</span>
+        <span class="tag">${escapeHtml(preview.mode === 'compare' ? '前后对比' : '单视图')}</span>
+      </div>
       <div class="preview-frame">
         ${body}
       </div>
@@ -612,10 +810,130 @@ function renderPreviewShell(body: string, note: string) {
   `
 }
 
-function renderLayoutPreview(item: DocItem) {
-  if (item.className === 'px-page') {
-    return renderPreviewShell(
+function renderCoreSpacingPreview(item: DocItem, preview: PreviewState) {
+  let isMargin = startsWithAny(item.className, ['m-', 'mx-', 'my-', 'mt-', 'mr-', 'mb-', 'ml-', '-m', '-mx', '-my', '-mt', '-mr', '-mb', '-ml'])
+  let target = isMargin
+    ? `
+      <div class="preview-stage-grid">
+        <div class="preview-core-spacing-target" style="${escapeHtml(item.output)}">
+          <div class="preview-card-surface preview-card-surface-tight">
+            <div class="preview-line preview-line-strong"></div>
+            <div class="preview-line"></div>
+          </div>
+        </div>
+      </div>
+    `
+    : `
+      <div class="preview-card-surface preview-core-spacing-target" style="${escapeHtml(item.output)}">
+        <div class="preview-line preview-line-strong"></div>
+        <div class="preview-line"></div>
+        <div class="preview-line preview-line-short"></div>
+      </div>
+    `
+  return renderPreviewShell(
+    target,
+    '先看它影响的是页面留白、卡片内距还是模块节奏，再决定是否应该改成语义尺寸原子。',
+    preview,
+  )
+}
+
+function renderCoreSizingPreview(item: DocItem, preview: PreviewState) {
+  let targetClass = startsWithAny(item.className, ['h-', 'min-h-', 'max-h-']) ? 'preview-core-size-block is-tall' : 'preview-core-size-block'
+  return renderPreviewShell(
+    `
+      <div class="preview-stage-grid">
+        <div class="${targetClass}" style="${escapeHtml(item.output)}"></div>
+      </div>
+    `,
+    '尺寸原子先服务结构和可点击性，再服务视觉紧凑感。',
+    preview,
+  )
+}
+
+function renderCoreLayoutPreview(item: DocItem, preview: PreviewState) {
+  let baseStyle = ''
+  if (startsWithAny(item.className, ['items-', 'justify-', 'flex-row', 'flex-col', 'flex-wrap', 'flex-nowrap', 'grow', 'shrink'])) {
+    baseStyle = 'display:flex; gap:12px;'
+  } else if (item.className.startsWith('grid') && !item.className.startsWith('grid-cols-') && !item.className.startsWith('grid-rows-')) {
+    baseStyle = 'display:grid; gap:12px;'
+  } else if (item.className.startsWith('grid-cols-')) {
+    baseStyle = 'display:grid; gap:12px;'
+  }
+
+  return renderPreviewShell(
+    `
+      <div class="preview-core-layout-stage" style="${escapeHtml(baseStyle + item.output)}">
+        <div class="preview-core-layout-cell"></div>
+        <div class="preview-core-layout-cell is-accent"></div>
+        <div class="preview-core-layout-cell"></div>
+      </div>
+    `,
+    '布局原子先决定排布方式和相对位置，再叠加间距、尺寸和颜色。',
+    preview,
+  )
+}
+
+function renderCoreTypographyPreview(item: DocItem, preview: PreviewState) {
+  return renderPreviewShell(
+    `
+      <div class="preview-card-surface preview-card-surface-wide">
+        <div class="preview-core-typography-target" style="${escapeHtml(item.output)}">TimCSS 让移动端样式决策更稳定，也更容易复用。</div>
+      </div>
+    `,
+    '排版最重要的是层级稳定。字号、行高和字重尽量一起看，不要单独放大一个值。',
+    preview,
+  )
+}
+
+function renderCoreColorPreview(item: DocItem, preview: PreviewState) {
+  let body =
+    item.className.startsWith('text-')
+      ? `
+        <div class="preview-card-surface preview-card-surface-wide">
+          <div class="preview-core-typography-target" style="${escapeHtml(item.output)}">这是一段颜色示例文本，用来观察阅读层级。</div>
+        </div>
       `
+      : `
+        <div class="preview-card-surface preview-card-surface-wide preview-core-color-swatch" style="${escapeHtml(item.output)}">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+        </div>
+      `
+  return renderPreviewShell(body, '局部可以直接用核心颜色；会高频复用的颜色更适合再抽成语义原子。', preview)
+}
+
+function renderCoreShapePreview(item: DocItem, preview: PreviewState) {
+  return renderPreviewShell(
+    `
+      <div class="preview-card-surface preview-card-surface-wide preview-core-shape-target" style="${escapeHtml(item.output)}">
+        <div class="preview-line preview-line-strong"></div>
+        <div class="preview-line"></div>
+      </div>
+    `,
+    '轮廓层级要尽量简洁。同一页面里，圆角和边框不要出现太多风格。',
+    preview,
+  )
+}
+
+function renderCoreEffectPreview(item: DocItem, preview: PreviewState) {
+  return renderPreviewShell(
+    `
+      <div class="preview-screen-card">
+        <div class="preview-card-surface preview-card-surface-wide preview-core-effect-target" style="${escapeHtml(item.output)}">
+          <div class="preview-line preview-line-strong"></div>
+          <div class="preview-line"></div>
+          <div class="preview-line preview-line-short"></div>
+        </div>
+      </div>
+    `,
+    '阴影和透明度都是辅助层。它们应该帮助用户理解层级，而不是主导界面。',
+    preview,
+  )
+}
+
+function renderLayoutPreview(item: DocItem, preview: PreviewState) {
+  if (item.className === 'px-page') {
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen preview-screen-page">
             <div class="preview-page-shell">
@@ -628,14 +946,36 @@ function renderLayoutPreview(item: DocItem) {
             </div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen preview-screen-page">
+                  <div class="preview-page-shell preview-page-shell-flat">
+                    <div class="preview-block preview-block-primary"></div>
+                    <div class="preview-card-surface">
+                      <div class="preview-line preview-line-strong"></div>
+                      <div class="preview-line"></div>
+                    </div>
+                    <div class="preview-block"></div>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '页面主容器先统一左右留白，再在内容层继续排卡片和模块。',
+      preview,
     )
   }
 
   if (item.className === 'py-section' || item.className === 'gap-section') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen preview-screen-page">
             <div class="preview-page-shell preview-stack-section">
@@ -645,14 +985,33 @@ function renderLayoutPreview(item: DocItem) {
             </div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen preview-screen-page">
+                  <div class="preview-page-shell preview-stack-compact">
+                    <div class="preview-block preview-block-primary"></div>
+                    <div class="preview-block"></div>
+                    <div class="preview-block"></div>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '这一层控制的是模块和模块之间的主节奏，不是按钮或卡片内部的小间距。',
+      preview,
     )
   }
 
   if (item.className === 'p-card' || item.className === 'gap-card') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-card-surface preview-card-surface-wide">
           <div class="preview-card-content">
             <div class="preview-line preview-line-strong"></div>
@@ -660,14 +1019,31 @@ function renderLayoutPreview(item: DocItem) {
             <div class="preview-button preview-button-inline"></div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-card-surface preview-card-surface-wide preview-card-surface-tight">
+                <div class="preview-card-content preview-card-content-tight">
+                  <div class="preview-line preview-line-strong"></div>
+                  <div class="preview-line"></div>
+                  <div class="preview-button preview-button-inline"></div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '卡片内边距和卡片内部元素间距要稳定，卡片之间的距离再交给 page / section 层。',
+      preview,
     )
   }
 
   if (item.className === 'h-nav') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen">
             <div class="preview-nav-bar">
@@ -684,14 +1060,36 @@ function renderLayoutPreview(item: DocItem) {
             </div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen">
+                  <div class="preview-nav-bar preview-nav-bar-tight">
+                    <span class="preview-dot"></span>
+                    <div class="preview-line preview-line-short"></div>
+                    <span class="preview-dot"></span>
+                  </div>
+                  <div class="preview-page-shell">
+                    <div class="preview-block preview-block-primary"></div>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '导航高度先独立出来，沉浸式头部再叠加安全区原子。',
+      preview,
     )
   }
 
   if (item.className === 'h-tabbar') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen preview-screen-tabbar">
             <div class="preview-page-shell">
@@ -705,15 +1103,44 @@ function renderLayoutPreview(item: DocItem) {
             </div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen preview-screen-tabbar">
+                  <div class="preview-page-shell">
+                    <div class="preview-block preview-block-primary"></div>
+                  </div>
+                  <div class="preview-tabbar preview-tabbar-tight">
+                    <span class="preview-tab"></span>
+                    <span class="preview-tab is-active"></span>
+                    <span class="preview-tab"></span>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '底栏高度先确定，再决定底部吸底操作区是否需要继续避让安全区。',
+      preview,
     )
   }
 
   return null
 }
 
-function renderControlPreview(item: DocItem) {
+function renderControlPreview(item: DocItem, preview: PreviewState) {
+  let currentTokens =
+    preview.density === 'compact'
+      ? compactTokens
+      : preview.density === 'spacious'
+        ? spaciousTokens
+        : comfortableTokens
   if (item.className.startsWith('h-control')) {
     let size =
       item.className === 'h-control-xs'
@@ -725,92 +1152,161 @@ function renderControlPreview(item: DocItem) {
             : item.className === 'h-control-xl'
               ? 'xl'
               : 'md'
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-surface-stack">
           <button class="preview-button" data-size="${size}">主要操作</button>
           <div class="preview-spec-row">
             <span>当前高度</span>
             <strong>${escapeHtml(
               size === 'xs'
-                ? comfortableTokens.controlHeight.xs
+                ? currentTokens.controlHeight.xs
                 : size === 'sm'
-                  ? comfortableTokens.controlHeight.sm
+                  ? currentTokens.controlHeight.sm
                   : size === 'lg'
-                    ? comfortableTokens.controlHeight.lg
+                    ? currentTokens.controlHeight.lg
                     : size === 'xl'
-                      ? comfortableTokens.controlHeight.xl
-                      : comfortableTokens.controlHeight.md,
+                      ? currentTokens.controlHeight.xl
+                      : currentTokens.controlHeight.md,
             )}</strong>
           </div>
-        </div>
-      `,
+        </div>`
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-surface-stack">
+                <button class="preview-button preview-button-tight" data-size="${size}">默认</button>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '先定控件高度，再补圆角、颜色和状态，按钮层级会更统一。',
+      preview,
     )
   }
 
   if (item.className === 'min-h-touch') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-touch-row">
           <div class="preview-touch-target">
             <div class="preview-line preview-line-strong"></div>
             <div class="preview-line preview-line-short"></div>
           </div>
-          <div class="preview-touch-rule">min ${escapeHtml(comfortableTokens.layout.touch)}</div>
+          <div class="preview-touch-rule">min ${escapeHtml(currentTokens.layout.touch)}</div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-touch-row">
+                <div class="preview-touch-target preview-touch-target-tight">
+                  <div class="preview-line preview-line-strong"></div>
+                  <div class="preview-line preview-line-short"></div>
+                </div>
+                <div class="preview-touch-rule">tight</div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '触控热区比视觉元素本身更重要。先保点击面积，再谈视觉收紧。',
+      preview,
     )
   }
 
   return null
 }
 
-function renderShapePreview(item: DocItem) {
+function renderShapePreview(item: DocItem, preview: PreviewState) {
   if (item.className === 'rounded-card') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-card-surface preview-card-surface-wide">
           <div class="preview-line preview-line-strong"></div>
           <div class="preview-line"></div>
           <div class="preview-line preview-line-short"></div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-card-surface preview-card-surface-wide preview-card-surface-square">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '卡片圆角比控件圆角更大一档，层级会更自然。',
+      preview,
     )
   }
 
   if (item.className === 'rounded-control') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-surface-stack">
           <button class="preview-button">主要按钮</button>
           <button class="preview-button preview-button-secondary">次操作</button>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-surface-stack">
+                <button class="preview-button preview-button-square">主要按钮</button>
+                <button class="preview-button preview-button-secondary preview-button-square">次操作</button>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '控件圆角适合按钮、输入框和胶囊控件，不建议和卡片圆角混用。',
+      preview,
     )
   }
 
   return null
 }
 
-function renderColorPreview(item: DocItem) {
+function renderColorPreview(item: DocItem, preview: PreviewState) {
   if (item.className === 'bg-primary' || item.className === 'text-on-primary') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-surface-stack">
           <button class="preview-button">立即提交</button>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-surface-stack">
+                <button class="preview-button preview-button-secondary">立即提交</button>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '主色层适合最重要的操作。主色背景里的文案优先配 text-on-primary。',
+      preview,
     )
   }
 
   if (item.className === 'bg-surface' || item.className === 'text-primary') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-screen-card">
           <div class="preview-card-surface preview-card-surface-wide">
             <div class="preview-line preview-line-strong"></div>
@@ -818,14 +1314,30 @@ function renderColorPreview(item: DocItem) {
             <div class="preview-line preview-line-short"></div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-screen-card preview-plain-surface">
+                <div class="preview-card-surface preview-card-surface-wide preview-card-surface-flat">
+                  <div class="preview-line preview-line-strong"></div>
+                  <div class="preview-line"></div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       'surface 负责承载信息层，主文本颜色负责阅读层级。',
+      preview,
     )
   }
 
   if (item.className === 'bg-background') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen preview-screen-background">
             <div class="preview-page-shell">
@@ -840,39 +1352,79 @@ function renderColorPreview(item: DocItem) {
             </div>
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen">
+                  <div class="preview-page-shell">
+                    <div class="preview-card-surface">
+                      <div class="preview-line preview-line-strong"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '页面背景和卡片表面层分开，层级才会清楚。',
+      preview,
     )
   }
 
   if (item.className === 'text-muted') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-surface-stack">
           <div class="preview-line preview-line-strong"></div>
           <div class="preview-line preview-line-muted"></div>
           <div class="preview-line preview-line-muted preview-line-short"></div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-surface-stack">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+                <div class="preview-line preview-line-short"></div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '辅助文本颜色只用于次级说明，不要承担主要信息。',
+      preview,
     )
   }
 
   if (item.className === 'border-default') {
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-input"></div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(`<div class="preview-input preview-input-soft"></div>`, after)
+        : after
+    return renderPreviewShell(
+      body,
       '默认边框色适合输入框、卡片边界和轻分隔，不适合强强调。',
+      preview,
     )
   }
 
   return null
 }
 
-function renderShadowPreview(item: DocItem) {
-  return renderPreviewShell(
-    `
+function renderShadowPreview(item: DocItem, preview: PreviewState) {
+  let after = `
       <div class="preview-screen-card">
         <div class="preview-card-surface preview-card-surface-wide ${item.className === 'shadow-elevated' ? 'is-elevated' : ''}">
           <div class="preview-line preview-line-strong"></div>
@@ -880,12 +1432,38 @@ function renderShadowPreview(item: DocItem) {
           <div class="preview-line preview-line-short"></div>
         </div>
       </div>
-    `,
+    `
+  let before = `
+    <div class="preview-screen-card">
+      <div class="preview-card-surface preview-card-surface-wide preview-card-surface-flat">
+        <div class="preview-line preview-line-strong"></div>
+        <div class="preview-line"></div>
+      </div>
+    </div>
+  `
+  return renderPreviewShell(
+    preview.mode === 'compare' ? renderPreviewCompare(before, after) : after,
     item.className === 'shadow-elevated' ? '更强的层级适合浮层和强调面板。' : '常规阴影适合信息卡，不要全页泛滥使用。',
+    preview,
   )
 }
 
-function renderWechatPreview(item: DocItem) {
+function renderWechatPreview(item: DocItem, preview: PreviewState) {
+  if (preview.context !== 'wechat-miniprogram') {
+    return renderPreviewShell(
+      `
+        <div class="preview-context">
+          <span class="preview-context-chip">仅微信小程序上下文可见</span>
+          <div class="preview-card-surface preview-card-surface-wide preview-card-surface-flat">
+            <div class="preview-line preview-line-strong"></div>
+            <div class="preview-line"></div>
+          </div>
+        </div>
+      `,
+      '当前切换在 H5 上下文。这类原子需要切回微信小程序上下文才能看到真实避让或发丝线效果。',
+      preview,
+    )
+  }
   if (item.category === 'wechat-safe-area') {
     let modifier =
       item.className === 'pb-tabbar-safe'
@@ -906,8 +1484,7 @@ function renderWechatPreview(item: DocItem) {
                       ? ' preview-safe-right'
                       : ''
 
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-phone">
           <div class="preview-screen preview-screen-safe${modifier}">
             <div class="preview-notch"></div>
@@ -920,8 +1497,30 @@ function renderWechatPreview(item: DocItem) {
             ${item.className === 'pb-tabbar-safe' ? '<div class="preview-tabbar"></div>' : ''}
           </div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-phone">
+                <div class="preview-screen preview-screen-safe">
+                  <div class="preview-notch"></div>
+                  <div class="preview-safe-content">
+                    <div class="preview-card-surface">
+                      <div class="preview-line preview-line-strong"></div>
+                      <div class="preview-line"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '安全区原子负责结构避让，不替代页面留白。预览里着色区域表示被预留出来的空间。',
+      preview,
     )
   }
 
@@ -936,21 +1535,35 @@ function renderWechatPreview(item: DocItem) {
             : item.className === 'hairline-l'
               ? 'is-left'
               : 'is-all'
-    return renderPreviewShell(
-      `
+    let after = `
         <div class="preview-card-surface preview-card-surface-wide preview-hairline ${edge}">
           <div class="preview-line preview-line-strong"></div>
           <div class="preview-line"></div>
         </div>
-      `,
+      `
+    let body =
+      preview.mode === 'compare'
+        ? renderPreviewCompare(
+            `
+              <div class="preview-card-surface preview-card-surface-wide preview-card-surface-flat">
+                <div class="preview-line preview-line-strong"></div>
+                <div class="preview-line"></div>
+              </div>
+            `,
+            after,
+          )
+        : after
+    return renderPreviewShell(
+      body,
       '发丝线适合弱分隔和轻边界，用来提示层级，不适合做强轮廓。',
+      preview,
     )
   }
 
   return null
 }
 
-function renderVariantPreview(item: DocItem) {
+function renderVariantPreview(item: DocItem, preview: PreviewState) {
   if (item.className === 'pressed:') {
     return renderPreviewShell(
       `
@@ -960,6 +1573,7 @@ function renderVariantPreview(item: DocItem) {
         </div>
       `,
       '变体本身不是样式，它负责在某个状态上下文里激活后面的原子类。',
+      preview,
     )
   }
 
@@ -972,6 +1586,7 @@ function renderVariantPreview(item: DocItem) {
         </div>
       `,
       '禁用态通常搭配透明度、文字颜色或边框变化一起出现。',
+      preview,
     )
   }
 
@@ -986,17 +1601,25 @@ function renderVariantPreview(item: DocItem) {
       </div>
     `,
     '这类原子提供的是上下文条件。实际视觉变化要看它和后续原子类如何组合。',
+    preview,
   )
 }
 
-function renderUtilityPreview(item: DocItem) {
-  if (item.kind === 'variant') return renderVariantPreview(item)
-  if (item.category === 'layout') return renderLayoutPreview(item)
-  if (item.category === 'control') return renderControlPreview(item)
-  if (item.category === 'shape') return renderShapePreview(item)
-  if (item.category === 'color') return renderColorPreview(item)
-  if (item.category === 'shadow') return renderShadowPreview(item)
-  if (item.category.startsWith('wechat-')) return renderWechatPreview(item)
+function renderUtilityPreview(item: DocItem, preview: PreviewState) {
+  if (item.kind === 'variant') return renderVariantPreview(item, preview)
+  if (item.category === 'layout') return renderLayoutPreview(item, preview)
+  if (item.category === 'control') return renderControlPreview(item, preview)
+  if (item.category === 'shape') return renderShapePreview(item, preview)
+  if (item.category === 'color') return renderColorPreview(item, preview)
+  if (item.category === 'shadow') return renderShadowPreview(item, preview)
+  if (item.category === 'core-spacing') return renderCoreSpacingPreview(item, preview)
+  if (item.category === 'core-sizing') return renderCoreSizingPreview(item, preview)
+  if (item.category === 'core-layout') return renderCoreLayoutPreview(item, preview)
+  if (item.category === 'core-typography') return renderCoreTypographyPreview(item, preview)
+  if (item.category === 'core-color') return renderCoreColorPreview(item, preview)
+  if (item.category === 'core-shape') return renderCoreShapePreview(item, preview)
+  if (item.category === 'core-effect') return renderCoreEffectPreview(item, preview)
+  if (item.category.startsWith('wechat-')) return renderWechatPreview(item, preview)
   return renderPreviewShell(
     `
       <div class="preview-card-surface preview-card-surface-wide">
@@ -1005,11 +1628,16 @@ function renderUtilityPreview(item: DocItem) {
       </div>
     `,
     '这张预览卡用于帮助你先看尺寸和层级，最终值仍以代码输出为准。',
+    preview,
   )
 }
 
 async function loadIndex(): Promise<{ meta: DocIndexPayload; items: DocItem[] }> {
-  let payload = docIndex as DocIndexPayload
+  let response = await fetch('/atomic-utilities-index.json', { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Failed to load docs index: ${response.status}`)
+  }
+  let payload = (await response.json()) as DocIndexPayload
   return {
     meta: payload,
     items: payload.items.map(toDocItem),
@@ -1075,13 +1703,17 @@ function createSearchContext(query: string): SearchContext {
 
 function scoreKeyword(item: DocItem, search: SearchContext) {
   let score = 0
-  let className = item.className.toLowerCase()
-  let intent = item.intent.toLowerCase()
-  let whenToUse = item.whenToUse.toLowerCase()
-  let output = item.output.toLowerCase()
-  let description = item.description.toLowerCase()
+  let className = item.searchClassName
+  let intent = item.searchIntent
+  let whenToUse = item.searchWhenToUse
+  let output = item.searchOutput
+  let description = item.searchDescription
+  let modifiers = item.searchModifiers
+  let modifierQuery =
+    search.normalizedQuery.startsWith(`${className}/`) ? search.normalizedQuery.slice(className.length + 1) : null
 
   if (includesTimcssTerm(className, search.normalizedQuery)) score += 110
+  if (modifierQuery && modifiers.includes(modifierQuery)) score += 120
   if (includesTimcssTerm(intent, search.normalizedQuery)) score += 80
   if (includesTimcssTerm(whenToUse, search.normalizedQuery)) score += 70
   if (includesTimcssTerm(description, search.normalizedQuery)) score += 55
@@ -1089,10 +1721,11 @@ function scoreKeyword(item: DocItem, search: SearchContext) {
 
   for (let term of search.terms) {
     if (includesTimcssTerm(className, term)) score += 34
+    if (modifiers.some((modifier) => includesTimcssTerm(modifier, term))) score += 22
     if (includesTimcssTerm(intent, term)) score += 28
     if (includesTimcssTerm(whenToUse, term)) score += 24
     if (includesTimcssTerm(description, term)) score += 18
-    if (item.tags.some((tag) => includesTimcssTerm(tag, term))) score += 12
+    if (item.searchTags.some((tag) => includesTimcssTerm(tag, term))) score += 12
   }
 
   if (item.status === 'stable') score += 4
@@ -1101,9 +1734,9 @@ function scoreKeyword(item: DocItem, search: SearchContext) {
 
 function scoreIntent(item: DocItem, search: SearchContext) {
   let score = 0
-  let className = item.className.toLowerCase()
-  let intent = item.intent.toLowerCase()
-  let whenToUse = item.whenToUse.toLowerCase()
+  let className = item.searchClassName
+  let intent = item.searchIntent
+  let whenToUse = item.searchWhenToUse
 
   if (includesTimcssTerm(intent, search.normalizedQuery)) score += 90
   if (includesTimcssTerm(whenToUse, search.normalizedQuery)) score += 80
@@ -1123,6 +1756,13 @@ function getCompositionSuggestion(item: DocItem) {
   if (item.category === 'layout') return '先用它搭布局骨架，再叠加背景、圆角、阴影和文本颜色。'
   if (item.category === 'control') return '通常和 rounded-control、bg-primary、text-on-primary、pressed:* 一起出现。'
   if (item.category.startsWith('wechat-')) return '优先在原生微信小程序页面中使用，并与 px-page、safe/notch 相关能力配合。'
+  if (item.category === 'core-spacing') return '优先把它当作局部微调层来用；页面级留白和交互尺寸优先用 TimCSS 语义原子。'
+  if (item.category === 'core-sizing') return '结构尺寸可以直接用它，交互尺寸优先对照 h-control 和 min-h-touch。'
+  if (item.category === 'core-layout') return '通常和 gap、width、height、color 原子一起出现，先定结构再定视觉。'
+  if (item.category === 'core-typography') return '字号、行高、字重最好一起看，保持整页排版层级收敛。'
+  if (item.category === 'core-color') return '局部可直接用；如果会高频复用，建议再抽成 TimCSS 语义颜色原子。'
+  if (item.category === 'core-shape') return '边框、圆角和阴影一起决定轮廓层级，建议只保留少量稳定组合。'
+  if (item.category === 'core-effect') return '阴影和透明度只表达层级与状态，不要替代真正的语义设计。'
   return '保持原子组合思维：布局、颜色、形状、状态分层叠加。'
 }
 
@@ -1130,6 +1770,20 @@ function formatGeneratedAt(value: string) {
   let date = new Date(value)
   if (Number.isNaN(date.getTime())) return '未知'
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function resolveModifierQueryClassName(item: DocItem, search: SearchContext) {
+  if (!item.modifiers?.length) return null
+  let prefix = `${item.className.toLowerCase()}/`
+  if (!search.normalizedQuery.startsWith(prefix)) return null
+  let queryModifier = search.normalizedQuery.slice(prefix.length)
+  let matchedModifier = item.modifiers.find((modifier) => modifier.toLowerCase() === queryModifier)
+  return matchedModifier ? `${item.className}/${matchedModifier}` : null
+}
+
+function replaceExampleClassName(example: string, item: DocItem, resolvedClassName: string) {
+  if (resolvedClassName === item.className) return example
+  return example.replaceAll(item.className, resolvedClassName)
 }
 
 function captureInputFocusSnapshot(): InputFocusSnapshot | null {
@@ -1153,31 +1807,28 @@ function restoreInputFocusSnapshot(root: ParentNode, snapshot: InputFocusSnapsho
   }
 }
 
-function getIndexNotice(meta: DocIndexPayload) {
-  let generatedAt = new Date(meta.generatedAt)
-  if (Number.isNaN(generatedAt.getTime())) {
-    return '索引时间不可解析。如你刚修改版本号或包元数据，请先执行 pnpm run timcss:docs:generate。'
-  }
-  if (Date.now() - generatedAt.getTime() > staleIndexThresholdMs) {
-    return '当前索引生成时间较早。若源码或包元数据已更新，请先重新生成 docs 索引。'
-  }
-  return '当前页面直接消费 docs 索引文件，搜索结果与原子项清单保持同源。'
+function normalizePrimaryRoute(route: RouteId): RouteId {
+  if (route === 'browse' || route === 'recipes') return 'catalog'
+  if (route === 'faq') return 'guides'
+  return route
 }
 
 function renderRouteNav(route: RouteId) {
-  return (Object.keys(routeLabels) as RouteId[])
+  let activeRoute = normalizePrimaryRoute(route)
+  return primaryNavRoutes
     .map(
       (item) =>
-        `<button class="topbar-link ${route === item ? 'is-active' : ''}" data-route="${item}">${escapeHtml(routeLabels[item])}</button>`,
+        `<button class="topbar-link ${activeRoute === item ? 'is-active' : ''}" data-route="${item}">${escapeHtml(routeLabels[item])}</button>`,
     )
     .join('')
 }
 
 function getAdjacentRoutes(route: RouteId) {
-  let index = routeOrder.indexOf(route)
+  let normalizedRoute = normalizePrimaryRoute(route)
+  let index = primaryRouteOrder.indexOf(normalizedRoute)
   return {
-    previous: index > 0 ? routeOrder[index - 1] : null,
-    next: index >= 0 && index < routeOrder.length - 1 ? routeOrder[index + 1] : null,
+    previous: index > 0 ? primaryRouteOrder[index - 1] : null,
+    next: index >= 0 && index < primaryRouteOrder.length - 1 ? primaryRouteOrder[index + 1] : null,
   }
 }
 
@@ -1224,6 +1875,21 @@ function renderGuideCard(guide: Guide) {
   `
 }
 
+function renderGuideFaqBlock() {
+  return `
+    <section class="section-block section-block-tight">
+      <div class="section-head">
+        <p class="eyebrow">Common Questions</p>
+        <h2>常见边界放在这里。</h2>
+        <p>减少单独 FAQ 页，接入时最常见的问题直接放在开始使用页里看完。</p>
+      </div>
+      <div class="faq-list">
+        ${renderFaqList()}
+      </div>
+    </section>
+  `
+}
+
 function renderFaqList() {
   return faqs
     .map(
@@ -1238,19 +1904,60 @@ function renderFaqList() {
 }
 
 function renderResultCard(item: DocItem, search: SearchContext, selected: boolean) {
+  let metaLabel = categoryLabels[item.category] ?? item.category
   return `
     <button class="utility-card ${selected ? 'is-active' : ''}" data-select="${item.id}">
       <div class="utility-card-top">
-        <code>${highlight(item.className, search.highlightQuery)}</code>
-        <span class="utility-status ${item.status === 'stable' ? 'is-stable' : 'is-experimental'}">${item.status === 'stable' ? '稳定' : '实验'}</span>
+        <div class="utility-row">
+          <code>${highlight(item.className, search.highlightQuery)}</code>
+          ${item.status === 'experimental' ? `<span class="utility-status is-experimental">实验</span>` : ''}
+        </div>
+        <span class="utility-meta">${escapeHtml(metaLabel)}${item.modifiers?.length ? ' · /modifier' : ''}</span>
       </div>
       <div class="utility-intent">${highlight(item.intent, search.highlightQuery)}</div>
-      <div class="utility-when">${highlight(item.whenToUse, search.highlightQuery)}</div>
-      <div class="tag-row">
-        ${item.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
-      </div>
     </button>
   `
+}
+
+function createCatalogCacheKey(query: string, platform: 'all' | PlatformTag, category: string) {
+  return `${query}\u0000${platform}\u0000${category}`
+}
+
+function isAsciiMicroTerm(term: string) {
+  return term.length <= 1 && /^[a-z0-9]$/i.test(term)
+}
+
+function isClassLikeQuery(query: string) {
+  return /^[-a-z0-9:/.[\]%!]+$/i.test(query) && /[-:/[\].%]/.test(query)
+}
+
+function matchesCatalogCandidate(item: DocItem, search: SearchContext) {
+  if (!search.normalizedQuery) return true
+
+  let classHaystack = `${item.searchClassName} ${item.searchModifiers.join(' ')}`
+  let primaryHaystack = `${item.searchClassName} ${item.searchIntent} ${item.searchWhenToUse}`
+  let tagHaystack = item.searchTags.join(' ')
+  let terms = search.terms.length > 0 ? search.terms : [search.normalizedQuery]
+  let modifierQuery =
+    search.normalizedQuery.startsWith(`${item.searchClassName}/`)
+      ? search.normalizedQuery.slice(item.searchClassName.length + 1)
+      : null
+
+  if (item.searchClassName === search.normalizedQuery) return true
+  if (modifierQuery && item.searchModifiers.includes(modifierQuery)) return true
+
+  if (isClassLikeQuery(search.normalizedQuery)) {
+    if (item.searchClassName.startsWith(search.normalizedQuery)) return true
+    return terms.every((term) => {
+      if (isAsciiMicroTerm(term)) return item.searchClassName.startsWith(term)
+      return classHaystack.includes(term) || item.searchOutput.includes(term)
+    })
+  }
+
+  return terms.every((term) => {
+    if (isAsciiMicroTerm(term)) return item.searchClassName.startsWith(term)
+    return primaryHaystack.includes(term) || tagHaystack.includes(term) || item.searchOutput.includes(term)
+  })
 }
 
 function renderApp(meta: DocIndexPayload, items: DocItem[]) {
@@ -1260,15 +1967,33 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   let activeCategory = initialState.category
   let selectedId = initialState.selected || (items.find((item) => item.status === 'stable')?.id ?? items[0]?.id ?? '')
   let copiedValue = ''
-  let route = initialState.route
+  let route = normalizePrimaryRoute(initialState.route)
   let paletteOpen = false
   let paletteQuery = ''
   let drawerOpen = false
+  let resultsRenderLimit = INITIAL_RESULTS_RENDER_LIMIT
+  let previewDensity: PreviewDensity = 'comfortable'
+  let previewContext: PlatformTag = initialState.platform === 'wechat-miniprogram' ? 'wechat-miniprogram' : 'mobile'
+  let previewMode: PreviewMode = 'single'
+  let scheduledRenderFrame = 0
+  let resultsLoadObserver: IntersectionObserver | null = null
+  let lastFilterKey = ''
+  let filterCache = new Map<string, DocItem[]>()
 
   let app = document.querySelector<HTMLDivElement>('#app')
   if (!app) throw new Error('Missing #app container')
+  let officialUtilityCount = countOfficialUtilities(items)
+  let availableCategories = ['all', ...categoryOrder.filter((category) => items.some((item) => item.category === category))]
 
   function filterItems(search: SearchContext) {
+    let cacheKey = createCatalogCacheKey(
+      `${search.intentMode ? 'intent:' : 'keyword:'}${search.normalizedQuery}`,
+      activePlatform,
+      activeCategory,
+    )
+    let cached = filterCache.get(cacheKey)
+    if (cached) return cached
+
     let visible = items.filter((item) => {
       let byPlatform = activePlatform === 'all' || item.platforms.includes(activePlatform)
       let byCategory = activeCategory === 'all' || item.category === activeCategory
@@ -1276,16 +2001,20 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     })
 
     if (!search.normalizedQuery) {
-      return [...visible].sort((left, right) => {
+      let sorted = [...visible].sort((left, right) => {
         if (left.status !== right.status) return left.status === 'stable' ? -1 : 1
         let leftIndex = categoryOrder.indexOf(left.category as (typeof categoryOrder)[number])
         let rightIndex = categoryOrder.indexOf(right.category as (typeof categoryOrder)[number])
         if (leftIndex !== rightIndex) return leftIndex - rightIndex
         return left.className.localeCompare(right.className)
       })
+      if (filterCache.size > 80) filterCache.clear()
+      filterCache.set(cacheKey, sorted)
+      return sorted
     }
 
-    return visible
+    let scored = visible
+      .filter((item) => matchesCatalogCandidate(item, search))
       .map((item) => {
         let keywordScore = scoreKeyword(item, search)
         let intentScore = scoreIntent(item, search)
@@ -1299,52 +2028,66 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         return left.item.className.localeCompare(right.item.className)
       })
       .map((entry) => entry.item)
+    if (filterCache.size > 80) filterCache.clear()
+    filterCache.set(cacheKey, scored)
+    return scored
   }
 
-  function getRecommendedRecipes(search: SearchContext, visible: DocItem[]) {
-    if (!search.normalizedQuery) return []
-    let visibleClasses = new Set(visible.map((item) => item.className))
-    return recipes
-      .filter((recipe) => {
-        if (activePlatform === 'all') return true
-        return recipe.platforms.includes('all') || recipe.platforms.includes(activePlatform)
-      })
-      .map((recipe) => {
-        let availableClasses = recipe.classes.filter((className) => visibleClasses.has(className))
-        if (availableClasses.length === 0) return null
-        let score = 0
-        for (let hint of recipe.queryHints) {
-          if (search.normalizedQuery.includes(hint.toLowerCase())) score += 60
-        }
-        for (let term of search.intentTerms) {
-          if (includesTimcssTerm(recipe.title, term)) score += 24
-          if (includesTimcssTerm(recipe.description, term)) score += 20
-          if (availableClasses.some((className) => includesTimcssTerm(className, term))) score += 18
-        }
-        if (score === 0) return null
-        return {
-          ...recipe,
-          score,
-          classString: availableClasses.join(' '),
-        }
-      })
-      .filter((recipe): recipe is NonNullable<typeof recipe> => recipe !== null)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 3)
+  function getRenderedResults(visible: DocItem[], selected: DocItem | null) {
+    let rendered = visible.slice(0, resultsRenderLimit)
+    if (selected && !rendered.some((item) => item.id === selected.id)) {
+      rendered = [selected, ...rendered.slice(0, Math.max(resultsRenderLimit - 1, 0))]
+    }
+    return rendered
+  }
+
+  function resetResultsRenderLimit() {
+    resultsRenderLimit = INITIAL_RESULTS_RENDER_LIMIT
+  }
+
+  function scheduleRender(resetLimit = false) {
+    if (resetLimit) resetResultsRenderLimit()
+    if (scheduledRenderFrame) cancelAnimationFrame(scheduledRenderFrame)
+    scheduledRenderFrame = requestAnimationFrame(() => {
+      scheduledRenderFrame = 0
+      render()
+    })
   }
 
   function getSelected(visible: DocItem[]) {
     return visible.find((item) => item.id === selectedId) ?? visible[0] ?? null
   }
 
+  function createCatalogView(search: SearchContext): CatalogViewState {
+    let visible = filterItems(search)
+    let selected = getSelected(visible)
+    if (selected) selectedId = selected.id
+    let rendered = getRenderedResults(visible, selected)
+    return {
+      visible,
+      rendered,
+      selected,
+      total: visible.length,
+      renderedCount: rendered.length,
+      hasMore: rendered.length < visible.length,
+      search,
+    }
+  }
+
+  function getEffectivePreviewContext(selected: DocItem | null): PlatformTag {
+    if (!selected) return previewContext
+    if (selected.platforms.includes(previewContext)) return previewContext
+    return selected.platforms[0] ?? previewContext
+  }
+
   function copyText(text: string) {
     copiedValue = text
     navigator.clipboard.writeText(text).catch(() => {})
-    render()
+    scheduleRender()
     window.setTimeout(() => {
       if (copiedValue === text) {
         copiedValue = ''
-        render()
+        scheduleRender()
       }
     }, 1200)
   }
@@ -1355,16 +2098,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     route = 'catalog'
     paletteOpen = false
     drawerOpen = false
-    render()
-  }
-
-  function openCategoryBrowse(category: string, platform: 'all' | PlatformTag = activePlatform) {
-    activeCategory = category
-    activePlatform = platform
-    route = 'catalog'
-    paletteOpen = false
-    drawerOpen = false
-    render()
+    scheduleRender(true)
   }
 
   function createSelectedUtilityLink(selected: DocItem | null) {
@@ -1387,18 +2121,18 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         action() {
           route = 'overview'
           paletteOpen = false
-          render()
+          scheduleRender()
         },
       },
       {
         id: 'route-guides',
         title: '前往开始使用',
-        subtitle: '查看 H5、小程序和 Taro / uni-app 接入方式',
+        subtitle: '查看 H5、小程序接入方式和常见边界',
         keywords: ['guides', '开始使用', '接入'],
         action() {
           route = 'guides'
           paletteOpen = false
-          render()
+          scheduleRender()
         },
       },
       {
@@ -1409,7 +2143,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         action() {
           route = 'foundations'
           paletteOpen = false
-          render()
+          scheduleRender()
         },
       },
       {
@@ -1420,40 +2154,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         action() {
           route = 'catalog'
           paletteOpen = false
-          render()
-        },
-      },
-      {
-        id: 'route-browse',
-        title: '前往分类浏览',
-        subtitle: '按布局、控件、安全区、状态等分类浏览原子',
-        keywords: ['browse', '分类', '浏览', 'layout', 'control'],
-        action() {
-          route = 'browse'
-          paletteOpen = false
-          render()
-        },
-      },
-      {
-        id: 'route-recipes',
-        title: '前往常用组合',
-        subtitle: '查看可直接复用的移动端原子组合 recipes',
-        keywords: ['recipes', '组合', 'recipe', '搭配'],
-        action() {
-          route = 'recipes'
-          paletteOpen = false
-          render()
-        },
-      },
-      {
-        id: 'route-faq',
-        title: '前往 FAQ',
-        subtitle: '查看常见问题与支持边界',
-        keywords: ['faq', '问题', '边界'],
-        action() {
-          route = 'faq'
-          paletteOpen = false
-          render()
+          scheduleRender()
         },
       },
       ...quickSearches.map((item) => ({
@@ -1467,25 +2168,13 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       })),
       ...categoryOrder.map((category) => ({
         id: `category-${category}`,
-        title: `浏览分类：${categoryLabels[category] ?? category}`,
+        title: `搜索分类：${categoryLabels[category] ?? category}`,
         subtitle: `查看 ${(items.filter((item) => item.category === category)).length} 个相关原子`,
         keywords: ['分类', 'category', category, categoryLabels[category] ?? category],
         action() {
-          route = 'browse'
           activeCategory = category
           paletteOpen = false
-          render()
-        },
-      })),
-      ...recipes.map((recipe) => ({
-        id: `recipe-${recipe.id}`,
-        title: `组合：${recipe.title}`,
-        subtitle: recipe.description,
-        keywords: ['recipe', '组合', recipe.title, recipe.description, ...recipe.classes],
-        action() {
-          route = 'recipes'
-          paletteOpen = false
-          render()
+          openCatalogSearch('', activePlatform)
         },
       })),
       ...guides.map((guide) => ({
@@ -1496,7 +2185,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         action() {
           route = 'guides'
           paletteOpen = false
-          render()
+          scheduleRender()
         },
       })),
       ...visible.slice(0, 8).map((item) => ({
@@ -1534,13 +2223,12 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">TimCSS Docs</p>
-          <h1>先定移动端规则，再选原子。</h1>
-          <p class="hero-text">这里优先回答原子类怎么用、尺寸怎么定、安全区怎么避让，而不是只给你一张 class 名单。</p>
+          <h1>先定规则，再查原子。</h1>
+          <p class="hero-text">先统一尺寸和平台边界，再直接查原子类的作用、用法和示例。</p>
           <div class="proof-strip">
             <span class="proof-pill">全部原子类</span>
-            <span class="proof-pill">移动端尺寸体系</span>
-            <span class="proof-pill">微信小程序避让规则</span>
-            <span class="proof-pill">原子组合建议</span>
+            <span class="proof-pill">尺寸规则</span>
+            <span class="proof-pill">微信小程序</span>
           </div>
           <div class="hero-actions">
             <button class="primary-link button-link" data-route="foundations">先看尺寸基础</button>
@@ -1549,26 +2237,27 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         </div>
         <div class="hero-side">
           <div class="summary-card">
-            <div class="summary-title">这站重点</div>
-            <ul class="summary-list">
-              <li>每个原子都给出作用、用法、搭配与最小示例</li>
-              <li>尺寸基础页先讲清楚 page / section / card / control / safe-area</li>
-              <li>官方验证平台：移动端 H5、原生微信小程序</li>
-            </ul>
-          </div>
-          <div class="summary-stats">
-            <div><span>原子总数</span><strong>${items.length}</strong></div>
-            <div><span>TimCSS 版本</span><strong>${escapeHtml(meta.packageVersion)}</strong></div>
-            <div><span>索引生成</span><strong>${escapeHtml(formatGeneratedAt(meta.generatedAt))}</strong></div>
-          </div>
+          <div class="summary-title">这站重点</div>
+          <ul class="summary-list">
+            <li>每个原子都有作用、用法和最小示例</li>
+            <li>尺寸基础先讲清 page、section、card、control 和 safe-area</li>
+            <li>Tailwind 官方全量 utility 已同步入库</li>
+          </ul>
+        </div>
+        <div class="summary-stats">
+          <div><span>原子总数</span><strong>${items.length}</strong></div>
+          <div><span>官方原子</span><strong>${officialUtilityCount}</strong></div>
+          <div><span>TimCSS 版本</span><strong>${escapeHtml(meta.packageVersion)}</strong></div>
+          <div><span>索引生成</span><strong>${escapeHtml(formatGeneratedAt(meta.generatedAt))}</strong></div>
+        </div>
         </div>
       </section>
 
       <section class="section-block">
         <div class="section-head">
           <p class="eyebrow">Start Here</p>
-          <h2>先选路径。</h2>
-          <p>第一次进站，先看尺寸基础；已经有问题场景时，直接进原子检索。</p>
+          <h2>只保留 3 个入口。</h2>
+          <p>先看尺寸基础；已有问题直接搜原子；接入时再看开始使用。</p>
         </div>
         <div class="path-grid">
           ${overviewPaths
@@ -1588,44 +2277,14 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
 
       <section class="section-block">
         <div class="section-head">
-          <p class="eyebrow">What Matters</p>
-          <h2>文档主线是原子，不是概念堆叠。</h2>
-          <p>所有页面都围绕使用场景、尺寸规则和复制落地来组织。</p>
+          <p class="eyebrow">How To Read</p>
+          <h2>先看规则，再看原子。</h2>
+          <p>大部分问题都应该落到尺寸基础或原子检索里解决。</p>
         </div>
         <div class="principle-grid">
-          <article class="principle-card"><h3>先讲尺寸</h3><p>把页面留白、控件高度、触控热区和安全区先讲透，再落到原子类。</p></article>
-          <article class="principle-card"><h3>再讲用法</h3><p>每个原子都解释作用、何时用、怎么搭，而不是只有 class 名。</p></article>
-          <article class="principle-card"><h3>最后给示例</h3><p>原子详情页直接给最小示例和相关原子，方便复制和继续扩展。</p></article>
-          <article class="principle-card"><h3>平台边界写清</h3><p>H5 与微信小程序能力分开写，避免把“可接入”误当成“已验证”。</p></article>
-        </div>
-      </section>
-
-      <section class="section-block">
-        <div class="section-head">
-          <p class="eyebrow">Quick Start</p>
-          <h2>常用入口</h2>
-        </div>
-        <div class="overview-actions">
-          <button class="shortcut-chip" data-route="foundations">看尺寸基础</button>
-          ${quickSearches
-            .map(
-              (item) =>
-                `<button class="shortcut-chip" data-search-chip="${escapeHtml(item)}">搜索 ${escapeHtml(item)}</button>`,
-            )
-            .join('')}
-          <button class="shortcut-chip" data-route="guides">查看接入路径</button>
-        </div>
-      </section>
-
-      <section class="section-block notice-block">
-        <div class="notice-card">
-          <h2>索引状态</h2>
-          <p>${escapeHtml(getIndexNotice(meta))}</p>
-          <div class="notice-tags">
-            <span class="tag">TimCSS ${escapeHtml(meta.packageVersion)}</span>
-            <span class="tag">schema ${escapeHtml(meta.schemaVersion)}</span>
-            <span class="tag">生成于 ${escapeHtml(formatGeneratedAt(meta.generatedAt))}</span>
-          </div>
+          <article class="principle-card"><h3>尺寸先统一</h3><p>先统一 page、section、card、control 和 safe-area，页面节奏才会稳。</p></article>
+          <article class="principle-card"><h3>原子直接可查</h3><p>每个原子直接给作用、用法、输出语义和最小示例，不绕弯。</p></article>
+          <article class="principle-card"><h3>边界集中写清</h3><p>接入方式和常见问题统一放进开始使用页，不再拆散到多个 tab。</p></article>
         </div>
       </section>
     `
@@ -1638,12 +2297,12 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
           <div class="section-head route-head">
             <p class="eyebrow">Foundations</p>
             <h2>这页先讲移动端尺寸规则。</h2>
-            <p>先确定 page、section、card、control 和 safe-area 的基准，再去选具体原子类，页面会更整齐，也更容易维护。</p>
+            <p>先定 page、section、card、control 和 safe-area，再去选原子。</p>
           </div>
           <aside class="route-aside">
             <div class="summary-title">这页优先看</div>
             <strong>8rpx 基准、触控热区、控件高度、安全区避让</strong>
-            <p>如果你在设计尺寸、按钮高度和页面留白，这页应该先看。</p>
+            <p>先把尺寸框架定稳，再进原子检索。</p>
           </aside>
         </div>
 
@@ -1691,7 +2350,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
           <div class="section-head">
             <p class="eyebrow">Quick Mapping</p>
             <h2>常见问题该先看哪些原子</h2>
-            <p>先从问题出发，再进入原子检索页拿单个类和最小示例。</p>
+            <p>先从问题找方向，再进入原子检索拿具体类名。</p>
           </div>
           <div class="foundation-grid foundation-grid-tight">
             <article class="foundation-card">
@@ -1733,134 +2392,34 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         <div class="route-hero-shell">
           <div class="section-head route-head">
             <p class="eyebrow">Get Started</p>
-            <h2>这页只解决接入问题。</h2>
+            <h2>这页只解决接入和边界。</h2>
             <p>先选平台，再复制最小配置和第一条命令。</p>
           </div>
           <aside class="route-aside">
             <div class="summary-title">你会得到</div>
-            <strong>最小配置 + 第一条检查命令</strong>
-            <p>接入完成后，再去检索页找原子。</p>
+            <strong>最小配置 + 第一条检查命令 + 常见边界</strong>
+            <p>接入完成后，再回到检索页找原子。</p>
           </aside>
         </div>
         <div class="guide-grid">
           ${guides.map(renderGuideCard).join('')}
         </div>
+        ${renderGuideFaqBlock()}
       </section>
     `
   }
 
-  function renderBrowsePage() {
-    let browseCategories = categoryOrder.filter((category) => items.some((item) => item.category === category))
-    let visibleItems = items.filter((item) => activePlatform === 'all' || item.platforms.includes(activePlatform))
-
-    return `
-      <section class="section-block route-hero">
-        <div class="route-hero-shell">
-          <div class="section-head route-head">
-            <p class="eyebrow">Browse</p>
-            <h2>这页按能力分类浏览。</h2>
-            <p>不知道类名时，从布局、控件、安全区、发丝线和状态开始看。</p>
-          </div>
-          <aside class="route-aside">
-            <div class="summary-title">适合场景</div>
-            <strong>知道问题类型，不知道类名</strong>
-            <p>先缩小范围，再进入检索页或直接点原子。</p>
-          </aside>
-        </div>
-        <div class="filter-row browse-filter-row">
-          <div class="filter-group">
-            ${(['all', 'mobile', 'wechat-miniprogram'] as const)
-              .map(
-                (platform) =>
-                  `<button class="filter-chip ${activePlatform === platform ? 'is-active' : ''}" data-platform="${platform}">${escapeHtml(platformLabels[platform])}</button>`,
-              )
-              .join('')}
-          </div>
-        </div>
-        <div class="browse-grid">
-          ${browseCategories
-            .map((category) => {
-              let categoryItems = visibleItems.filter((item) => item.category === category)
-              let preview = categoryItems.slice(0, 5)
-              let stableCount = categoryItems.filter((item) => item.status === 'stable').length
-              return `
-                <article class="browse-card ${activeCategory === category ? 'is-active' : ''}">
-                  <div class="browse-card-head">
-                    <h3>${escapeHtml(categoryLabels[category] ?? category)}</h3>
-                    <span class="tag">${categoryItems.length}</span>
-                  </div>
-                  <p class="browse-card-text">稳定 ${stableCount} 个 · 适合先从这一类能力里找可复用的原子组合。</p>
-                  <div class="browse-preview">
-                    ${preview.map((item) => `<button class="browse-preview-chip" data-browse-select="${item.id}">${escapeHtml(item.className)}</button>`).join('')}
-                  </div>
-                  <div class="browse-actions">
-                    <button class="inline-btn" data-browse-category="${category}">在检索页打开</button>
-                    <button class="inline-btn" data-search-chip="${escapeHtml(categoryLabels[category] ?? category)}">按分类名搜索</button>
-                  </div>
-                </article>
-              `
-            })
-            .join('')}
-        </div>
-      </section>
-    `
-  }
-
-  function renderRecipesPage() {
-    return `
-      <section class="section-block route-hero">
-        <div class="route-hero-shell">
-          <div class="section-head route-head">
-            <p class="eyebrow">Recipes</p>
-            <h2>这页先给可用组合。</h2>
-            <p>适合你不想从单个原子开始，想先拿到一套可靠搭配。</p>
-          </div>
-          <aside class="route-aside">
-            <div class="summary-title">适合场景</div>
-            <strong>先复制，再微调</strong>
-            <p>组合不是组件库，只是起步模板。</p>
-          </aside>
-        </div>
-        <div class="recipe-grid">
-          ${recipes
-            .map((recipe) => {
-              let supportedPlatforms =
-                recipe.platforms.includes('all')
-                  ? 'H5 移动端 / 微信小程序'
-                  : recipe.platforms.map((platform) => platformLabels[platform]).join(' / ')
-              let classString = recipe.classes.join(' ')
-              return `
-                <article class="recipe-card">
-                  <div class="guide-title-row">
-                    <h3>${escapeHtml(recipe.title)}</h3>
-                    <span class="tag">${escapeHtml(supportedPlatforms)}</span>
-                  </div>
-                  <p>${escapeHtml(recipe.description)}</p>
-                  <pre class="code-block"><code>${escapeHtml(classString)}</code></pre>
-                  <div class="tag-row">
-                    ${recipe.queryHints.map((hint) => `<span class="tag">${escapeHtml(hint)}</span>`).join('')}
-                  </div>
-                  <div class="recipe-actions">
-                    <button class="inline-btn" data-copy="${escapeHtml(classString)}">${copiedValue === classString ? '已复制' : '复制组合'}</button>
-                    <button class="inline-btn" data-copy="${escapeHtml(`<view class="${classString}">组合示例</view>`)}">复制示例</button>
-                    <button class="inline-btn" data-recipe-search="${escapeHtml(recipe.queryHints[0] ?? recipe.title)}">在检索页打开</button>
-                  </div>
-                </article>
-              `
-            })
-            .join('')}
-        </div>
-      </section>
-    `
-  }
-
-  function renderCatalogPage() {
-    let search = createSearchContext(query)
-    let visible = filterItems(search)
-    let selected = getSelected(visible)
-    if (selected) selectedId = selected.id
-    let recipesForQuery = getRecommendedRecipes(search, visible)
-    let categoryTabs = ['all', ...categoryOrder.filter((category) => items.some((item) => item.category === category))]
+  function renderCatalogPage(catalogView: CatalogViewState) {
+    let { search, visible, rendered, selected, total, renderedCount, hasMore } = catalogView
+    let resolvedModifierClassName = selected ? resolveModifierQueryClassName(selected, search) : null
+    let displayClassName = resolvedModifierClassName ?? selected?.className ?? ''
+    let displayExample = selected ? replaceExampleClassName(selected.example, selected, displayClassName) : ''
+    let effectivePreviewContext = getEffectivePreviewContext(selected)
+    let previewState: PreviewState = {
+      density: previewDensity,
+      context: effectivePreviewContext,
+      mode: previewMode,
+    }
 
     let emptyState = `
       <div class="empty-card empty-search-card">
@@ -1876,25 +2435,20 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
 
     return `
       <section class="section-block route-hero">
-        <div class="route-hero-shell">
-          <div class="section-head route-head">
-            <p class="eyebrow">Search</p>
-            <h2>这页只负责找原子。</h2>
-            <p>先搜问题词，再看推荐组合，最后复制类名和示例。</p>
+          <div class="route-hero-shell">
+            <div class="section-head route-head">
+              <p class="eyebrow">Search</p>
+              <h2>这页只负责找原子。</h2>
+              <p>输入问题词或类名，直接得到原子作用、用法和示例。</p>
+            </div>
+            <aside class="route-aside">
+              <div class="summary-title">最快方式</div>
+              <strong>先搜“安全区”“按钮高度”“px-4”“w-full”</strong>
+              <p>不确定类名先搜问题词，知道类名就直接输入。</p>
+            </aside>
           </div>
-          <aside class="route-aside">
-            <div class="summary-title">最快方式</div>
-            <strong>先搜“安全区”“按钮高度”“发丝线”</strong>
-            <p>不确定类名时，先别猜 class。</p>
-          </aside>
-        </div>
 
         <div class="search-panel">
-          <div class="search-steps">
-            <span>1. 先搜问题</span>
-            <span>2. 再看推荐组合</span>
-            <span>3. 最后复制原子和示例</span>
-          </div>
           <div class="search-box">
             <input id="search-input" type="search" placeholder="搜索 pb-safe / 发丝线 / 卡片，或 intent:底部安全区" value="${escapeHtml(query)}" />
             <button class="ghost-link-button" data-clear-search ${query ? '' : 'disabled'}>清空</button>
@@ -1909,52 +2463,42 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                 .join('')}
             </div>
             <div class="filter-group">
-              ${categoryTabs
+              ${availableCategories
                 .map((category) => `<button class="filter-chip ${activeCategory === category ? 'is-active' : ''}" data-category="${category}">${escapeHtml(categoryLabels[category] ?? category)}</button>`)
                 .join('')}
             </div>
           </div>
           <div class="search-meta">
             <span>当前模式：<strong>${search.intentMode ? '语义意图' : '关键词匹配'}</strong></span>
-            <span>结果：<strong>${visible.length}</strong></span>
+            <span>结果：<strong>${total}</strong></span>
+            <span>当前渲染：<strong>${renderedCount}</strong></span>
             <span>快捷键：<strong>/</strong> 聚焦搜索，<strong>⌘K / Ctrl+K</strong> 打开命令面板</span>
           </div>
           <div class="catalog-actions">
             <button class="inline-btn" data-copy-link>${copiedValue === window.location.href ? '已复制链接' : '复制当前检索链接'}</button>
-            <button class="inline-btn" data-route="browse">按分类浏览</button>
+            <button class="inline-btn" data-route="foundations">回到尺寸基础</button>
           </div>
         </div>
 
-        ${
-          recipesForQuery.length > 0
-            ? `
-              <div class="recipe-grid">
-                ${recipesForQuery
-                  .map(
-                    (recipe) => `
-                      <article class="recipe-card">
-                        <h3>${highlight(recipe.title, search.highlightQuery)}</h3>
-                        <p>${highlight(recipe.description, search.highlightQuery)}</p>
-                        <pre class="code-block"><code>${escapeHtml(recipe.classString)}</code></pre>
-                        <div class="recipe-actions">
-                          <button class="inline-btn" data-copy="${escapeHtml(recipe.classString)}">${copiedValue === recipe.classString ? '已复制' : '复制组合'}</button>
-                          <button class="inline-btn" data-copy="${escapeHtml(`<view class="${recipe.classString}">组合示例</view>`)}">复制示例</button>
-                        </div>
-                      </article>
-                    `,
-                  )
-                  .join('')}
-              </div>
-            `
-            : ''
-        }
-
         <div class="catalog-layout">
-          <div class="results-panel">
+          <div class="results-shell">
+            <div class="results-panel">
             ${
-              visible.length > 0
-                ? visible.map((item) => renderResultCard(item, search, selected?.id === item.id)).join('')
+              total > 0
+                ? rendered.map((item) => renderResultCard(item, search, selected?.id === item.id)).join('')
                 : emptyState
+            }
+            </div>
+            ${
+              hasMore
+                ? `
+                  <div class="results-footer">
+                    <button class="inline-btn" data-load-more-results>继续加载 ${Math.min(RESULTS_RENDER_STEP, total - renderedCount)} 条</button>
+                    <span class="search-meta">已渲染 ${renderedCount} / ${total} 条，为了保持搜索丝滑，结果列表采用分段渲染。</span>
+                  </div>
+                  <div class="results-sentinel" data-results-sentinel aria-hidden="true"></div>
+                `
+                : ''
             }
           </div>
           <aside class="detail-panel">
@@ -1964,13 +2508,23 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                   <div class="detail-head" id="detail-${escapeHtml(selected.id)}">
                     <div>
                       <p class="detail-kicker">${escapeHtml(selected.platforms.map((platform) => platformLabels[platform]).join(' / '))}</p>
-                      <h3><code>${escapeHtml(selected.className)}</code></h3>
+                      <h3><code>${escapeHtml(displayClassName)}</code></h3>
                     </div>
-                    <button class="inline-btn" data-copy="${escapeHtml(selected.className)}">${copiedValue === selected.className ? '已复制' : '复制类名'}</button>
+                    <button class="inline-btn" data-copy="${escapeHtml(displayClassName)}">${copiedValue === displayClassName ? '已复制' : '复制类名'}</button>
                   </div>
                   <div class="tag-row">
                     ${selected.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                   </div>
+                  ${
+                    resolvedModifierClassName
+                      ? `
+                        <div class="detail-block">
+                          <div class="mini-heading">修饰符命中</div>
+                          <p>当前结果按 <code>${escapeHtml(resolvedModifierClassName)}</code> 命中。下方文档以基类 <code>${escapeHtml(selected.className)}</code> 为主体，并保留该 <code>/modifier</code> 形式的用法入口。</p>
+                        </div>
+                      `
+                      : ''
+                  }
                   <div class="detail-block">
                     <div class="mini-heading">作用</div>
                     <p>${highlight(selected.intent, search.highlightQuery)}</p>
@@ -1993,6 +2547,21 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                       `
                       : ''
                   }
+                  ${
+                    selected.modifiers?.length
+                      ? `
+                        <div class="detail-block">
+                          <div class="mini-heading">可用修饰符</div>
+                          <p>这个原子支持下列 <code>/modifier</code> 形式，适合继续微调透明度、混合方式或附加参数。</p>
+                          <div class="tag-row detail-tag-row">
+                            ${selected.modifiers
+                              .map((modifier) => `<button class="tag tag-button" data-search-chip="${escapeHtml(`${selected.className}/${modifier}`)}">${escapeHtml(`/${modifier}`)}</button>`)
+                              .join('')}
+                          </div>
+                        </div>
+                      `
+                      : ''
+                  }
                   <div class="detail-block">
                     <div class="mini-heading">推荐搭配</div>
                     <p>${escapeHtml(getCompositionSuggestion(selected))}</p>
@@ -2004,18 +2573,45 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                   </div>
                   <div class="detail-block">
                     <div class="mini-heading">视觉预览</div>
-                    ${renderUtilityPreview(selected)}
+                    <div class="preview-toolbar">
+                      <div class="preview-toolbar-group">
+                        <span class="preview-toolbar-label">密度</span>
+                        ${(['compact', 'comfortable', 'spacious'] as const)
+                          .map(
+                            (density) =>
+                              `<button class="filter-chip ${previewDensity === density ? 'is-active' : ''}" data-preview-density="${density}">${escapeHtml(density)}</button>`,
+                          )
+                          .join('')}
+                      </div>
+                      <div class="preview-toolbar-group">
+                        <span class="preview-toolbar-label">上下文</span>
+                        ${(['mobile', 'wechat-miniprogram'] as const)
+                          .map(
+                            (context) =>
+                              `<button class="filter-chip ${effectivePreviewContext === context ? 'is-active' : ''}" data-preview-context="${context}" ${
+                                !selected.platforms.includes(context) ? 'data-preview-disabled="true"' : ''
+                              }>${escapeHtml(platformLabels[context])}</button>`,
+                          )
+                          .join('')}
+                      </div>
+                      <div class="preview-toolbar-group">
+                        <span class="preview-toolbar-label">模式</span>
+                        <button class="filter-chip ${previewMode === 'single' ? 'is-active' : ''}" data-preview-mode="single">单视图</button>
+                        <button class="filter-chip ${previewMode === 'compare' ? 'is-active' : ''}" data-preview-mode="compare">前后对比</button>
+                      </div>
+                    </div>
+                    ${renderUtilityPreview(selected, previewState)}
                   </div>
                   <div class="detail-block">
-                    <div class="mini-heading">输出语义</div>
+                    <div class="mini-heading">${resolvedModifierClassName ? '基类输出语义' : '输出语义'}</div>
                     <pre class="code-block"><code>${highlight(selected.output, search.highlightQuery)}</code></pre>
                   </div>
                   <div class="detail-block">
                     <div class="mini-heading">最小示例</div>
-                    <pre class="code-block"><code>${escapeHtml(selected.example)}</code></pre>
+                    <pre class="code-block"><code>${escapeHtml(displayExample)}</code></pre>
                   </div>
                   <div class="detail-actions">
-                    <button class="inline-btn" data-copy="${escapeHtml(selected.example)}">复制示例</button>
+                    <button class="inline-btn" data-copy="${escapeHtml(displayExample)}">复制示例</button>
                     <button class="inline-btn" data-copy-detail-link="${escapeHtml(createSelectedUtilityLink(selected))}">${copiedValue === createSelectedUtilityLink(selected) ? '已复制详情链接' : '复制详情链接'}</button>
                   </div>
                 `
@@ -2027,40 +2623,16 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     `
   }
 
-  function renderFaqPage() {
-    return `
-      <section class="section-block route-hero">
-        <div class="route-hero-shell">
-          <div class="section-head route-head">
-            <p class="eyebrow">FAQ</p>
-            <h2>这页集中看边界和排查。</h2>
-            <p>支持什么，不支持什么，遇到问题先查这里。</p>
-          </div>
-          <aside class="route-aside">
-            <div class="summary-title">优先阅读</div>
-            <strong>平台边界、输出策略、搜索不到结果时怎么办</strong>
-            <p>先看这里，再回到具体页面操作。</p>
-          </aside>
-        </div>
-        <div class="faq-list">
-          ${renderFaqList()}
-        </div>
-      </section>
-    `
-  }
-
-  function renderPage() {
+  function renderPage(catalogView: CatalogViewState | null) {
     if (route === 'foundations') return renderFoundationsPage()
     if (route === 'guides') return renderGuidesPage()
-    if (route === 'browse') return renderBrowsePage()
-    if (route === 'recipes') return renderRecipesPage()
-    if (route === 'catalog') return renderCatalogPage()
-    if (route === 'faq') return renderFaqPage()
+    if (route === 'catalog' && catalogView) return renderCatalogPage(catalogView)
     return renderOverviewPage()
   }
 
   function renderDrawer(route: RouteId) {
     if (!drawerOpen) return ''
+    let activeRoute = normalizePrimaryRoute(route)
     return `
       <div class="drawer-backdrop" data-drawer-backdrop>
         <aside class="drawer" aria-label="文档导航">
@@ -2069,10 +2641,10 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
             <button class="ghost-link-button" data-close-drawer>关闭</button>
           </div>
           <div class="drawer-links">
-            ${(Object.keys(routeLabels) as RouteId[])
+            ${primaryNavRoutes
               .map(
                 (item) =>
-                  `<button class="drawer-link ${route === item ? 'is-active' : ''}" data-route="${item}">${escapeHtml(routeLabels[item])}</button>`,
+                  `<button class="drawer-link ${activeRoute === item ? 'is-active' : ''}" data-route="${item}">${escapeHtml(routeLabels[item])}</button>`,
               )
               .join('')}
           </div>
@@ -2104,7 +2676,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
                       `,
                     )
                     .join('')
-                : `<div class="empty-card"><strong>没有匹配项。</strong><p>试试输入“搜索 安全区”或“前往 FAQ”。</p></div>`
+                : `<div class="empty-card"><strong>没有匹配项。</strong><p>试试输入“搜索 安全区”或“前往开始使用”。</p></div>`
             }
           </div>
         </div>
@@ -2113,9 +2685,25 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
   }
 
   function render() {
+    if (scheduledRenderFrame) {
+      cancelAnimationFrame(scheduledRenderFrame)
+      scheduledRenderFrame = 0
+    }
+    resultsLoadObserver?.disconnect()
+    resultsLoadObserver = null
     let focusSnapshot = captureInputFocusSnapshot()
     let search = createSearchContext(query)
-    let visible = filterItems(search)
+    let filterKey = createCatalogCacheKey(
+      `${search.intentMode ? 'intent:' : 'keyword:'}${search.normalizedQuery}`,
+      activePlatform,
+      activeCategory,
+    )
+    if (filterKey !== lastFilterKey) {
+      lastFilterKey = filterKey
+      resetResultsRenderLimit()
+    }
+    let catalogView = route === 'catalog' ? createCatalogView(search) : null
+    let visible = catalogView?.visible ?? (paletteOpen ? filterItems(search) : [])
     if (!items.some((item) => item.id === selectedId)) {
       selectedId = items.find((item) => item.status === 'stable')?.id ?? items[0]?.id ?? ''
     }
@@ -2126,7 +2714,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       category: activeCategory,
       selected: selectedId,
     })
-    document.title = route === 'overview' ? 'TimCSS 文档站' : `TimCSS 文档站 · ${routeLabels[route]}`
+    document.title = route === 'overview' ? 'TimCSS 文档站' : `TimCSS 文档站 · ${routeLabels[normalizePrimaryRoute(route)]}`
 
     app.innerHTML = `
       <div class="site-shell">
@@ -2142,7 +2730,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         </header>
 
         <main class="page">
-          ${renderPage()}
+          ${renderPage(catalogView)}
           ${renderPager(route)}
 
           <section class="section-block footer-block">
@@ -2150,10 +2738,8 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
               <h2>继续阅读</h2>
               <div class="footer-links">
                 <button class="footer-link-card" data-route="foundations"><strong>尺寸基础</strong><span>先看移动端留白、触控、导航和安全区的尺寸规则。</span></button>
-                <button class="footer-link-card" data-route="guides"><strong>开始使用</strong><span>先看 H5、微信小程序和 Taro / uni-app 的接入路径。</span></button>
                 <button class="footer-link-card" data-route="catalog"><strong>原子检索</strong><span>按问题、意图和类名搜索，并直接复制最小示例。</span></button>
-                <button class="footer-link-card" data-route="recipes"><strong>常用组合</strong><span>先拿高频移动端组合，再按业务微调。</span></button>
-                <button class="footer-link-card" data-route="faq"><strong>FAQ</strong><span>集中看支持边界、默认行为和排查建议。</span></button>
+                <button class="footer-link-card" data-route="guides"><strong>开始使用</strong><span>先看 H5、微信小程序接入方式和常见边界。</span></button>
               </div>
             </div>
           </section>
@@ -2166,13 +2752,13 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     let searchInput = app.querySelector<HTMLInputElement>('#search-input')
     searchInput?.addEventListener('input', (event) => {
       query = (event.target as HTMLInputElement).value
-      render()
+      scheduleRender(true)
     })
 
     let paletteInput = app.querySelector<HTMLInputElement>('#palette-input')
     paletteInput?.addEventListener('input', (event) => {
       paletteQuery = (event.target as HTMLInputElement).value
-      render()
+      scheduleRender()
     })
     if (focusSnapshot) {
       restoreInputFocusSnapshot(app, focusSnapshot)
@@ -2194,49 +2780,49 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         if (!next) return
         route = next
         drawerOpen = false
-        render()
+        scheduleRender()
       })
     }
 
     app.querySelectorAll<HTMLElement>('[data-open-drawer]').forEach((button) => {
       button.addEventListener('click', () => {
         drawerOpen = true
-        render()
+        scheduleRender()
       })
     })
 
     app.querySelectorAll<HTMLElement>('[data-close-drawer]').forEach((button) => {
       button.addEventListener('click', () => {
         drawerOpen = false
-        render()
+        scheduleRender()
       })
     })
 
     app.querySelector<HTMLElement>('[data-drawer-backdrop]')?.addEventListener('click', (event) => {
       if (event.target !== event.currentTarget) return
       drawerOpen = false
-      render()
+      scheduleRender()
     })
 
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-open-palette]')) {
       button.addEventListener('click', () => {
         paletteOpen = true
         paletteQuery = ''
-        render()
+        scheduleRender()
       })
     }
 
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-close-palette]')) {
       button.addEventListener('click', () => {
         paletteOpen = false
-        render()
+        scheduleRender()
       })
     }
 
     app.querySelector<HTMLElement>('[data-palette-backdrop]')?.addEventListener('click', (event) => {
       if (event.target !== event.currentTarget) return
       paletteOpen = false
-      render()
+      scheduleRender()
     })
 
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-search-chip]')) {
@@ -2245,38 +2831,49 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       })
     }
 
-    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-recipe-search]')) {
-      button.addEventListener('click', () => {
-        openCatalogSearch(button.dataset.recipeSearch ?? '')
-      })
-    }
-
-    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-browse-category]')) {
-      button.addEventListener('click', () => {
-        openCategoryBrowse(button.dataset.browseCategory ?? 'all')
-      })
-    }
-
-    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-browse-select]')) {
-      button.addEventListener('click', () => {
-        selectedId = button.dataset.browseSelect ?? selectedId
-        route = 'catalog'
-        render()
-      })
-    }
-
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-platform]')) {
       button.addEventListener('click', () => {
         let next = button.dataset.platform
         if (next === 'all' || next === 'mobile' || next === 'wechat-miniprogram') activePlatform = next
-        render()
+        scheduleRender(true)
       })
     }
 
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-category]')) {
       button.addEventListener('click', () => {
         activeCategory = button.dataset.category ?? 'all'
-        render()
+        scheduleRender(true)
+      })
+    }
+
+    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-preview-density]')) {
+      button.addEventListener('click', () => {
+        let next = button.dataset.previewDensity
+        if (next === 'compact' || next === 'comfortable' || next === 'spacious') {
+          previewDensity = next
+          scheduleRender()
+        }
+      })
+    }
+
+    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-preview-context]')) {
+      button.addEventListener('click', () => {
+        if (button.dataset.previewDisabled === 'true') return
+        let next = button.dataset.previewContext
+        if (next === 'mobile' || next === 'wechat-miniprogram') {
+          previewContext = next
+          scheduleRender()
+        }
+      })
+    }
+
+    for (let button of app.querySelectorAll<HTMLButtonElement>('[data-preview-mode]')) {
+      button.addEventListener('click', () => {
+        let next = button.dataset.previewMode
+        if (next === 'single' || next === 'compare') {
+          previewMode = next
+          scheduleRender()
+        }
       })
     }
 
@@ -2292,9 +2889,14 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-select]')) {
       button.addEventListener('click', () => {
         selectedId = button.dataset.select ?? selectedId
-        render()
+        scheduleRender()
       })
     }
+
+    app.querySelector<HTMLButtonElement>('[data-load-more-results]')?.addEventListener('click', () => {
+      resultsRenderLimit += RESULTS_RENDER_STEP
+      scheduleRender()
+    })
 
     for (let button of app.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
       button.addEventListener('click', () => {
@@ -2311,9 +2913,22 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         query = ''
         activePlatform = 'all'
         activeCategory = 'all'
-        render()
+        scheduleRender(true)
       })
     })
+
+    let resultsSentinel = app.querySelector<HTMLElement>('[data-results-sentinel]')
+    if (resultsSentinel && typeof IntersectionObserver !== 'undefined') {
+      resultsLoadObserver = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return
+          resultsRenderLimit += RESULTS_RENDER_STEP
+          scheduleRender()
+        },
+        { rootMargin: '240px 0px' },
+      )
+      resultsLoadObserver.observe(resultsSentinel)
+    }
 
     app.querySelector<HTMLButtonElement>('[data-copy-detail-link]')?.addEventListener('click', () => {
       copyText(app.querySelector<HTMLButtonElement>('[data-copy-detail-link]')?.dataset.copyDetailLink ?? '')
@@ -2333,12 +2948,12 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       return
     }
     let state = getHashState()
-    route = state.route
+    route = normalizePrimaryRoute(state.route)
     query = state.query
     activePlatform = state.platform
     activeCategory = state.category
     selectedId = state.selected || selectedId
-    render()
+    scheduleRender()
   })
 
   document.addEventListener('keydown', (event) => {
@@ -2350,7 +2965,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       event.preventDefault()
       if (route !== 'catalog') {
         route = 'catalog'
-        render()
+        scheduleRender()
       }
       window.setTimeout(() => {
         document.querySelector<HTMLInputElement>('#search-input')?.focus()
@@ -2361,17 +2976,17 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
       event.preventDefault()
       paletteOpen = !paletteOpen
       if (!paletteOpen) paletteQuery = ''
-      render()
+      scheduleRender()
       return
     }
     if (event.key === 'Escape' && paletteOpen) {
       paletteOpen = false
-      render()
+      scheduleRender()
       return
     }
     if (event.key === 'Escape' && drawerOpen) {
       drawerOpen = false
-      render()
+      scheduleRender()
     }
   })
 

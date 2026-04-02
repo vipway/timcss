@@ -40,6 +40,7 @@
     "timcss:print-entry": "node ./scripts/run-timcss-cli.mjs print-entry",
     "timcss:catalog": "node ./scripts/run-timcss-cli.mjs catalog",
     "timcss:docs:generate": "node ./scripts/generate-timcss-doc-index.mjs",
+    "timcss:docs:audit": "node ./scripts/timcss-docs-audit.mjs",
     "timcss:docs:dev": "pnpm run timcss:docs:generate && pnpm --filter @timcss/docs dev",
     "timcss:docs:build": "pnpm run timcss:docs:generate && pnpm --filter @timcss/docs build",
     "timcss:clean": "rm -rf .timcss dist apps/docs/dist examples/react-mobile/dist examples/wechat-miniapp/dist packages/timcss-*/dist",
