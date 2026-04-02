@@ -1908,13 +1908,15 @@ function renderResultCard(item: DocItem, search: SearchContext, selected: boolea
   return `
     <button class="utility-card ${selected ? 'is-active' : ''}" data-select="${item.id}">
       <div class="utility-card-top">
-        <div class="utility-row">
+        <div class="utility-row utility-row-main">
           <code>${highlight(item.className, search.highlightQuery)}</code>
           ${item.status === 'experimental' ? `<span class="utility-status is-experimental">实验</span>` : ''}
         </div>
-        <span class="utility-meta">${escapeHtml(metaLabel)}${item.modifiers?.length ? ' · /modifier' : ''}</span>
       </div>
-      <div class="utility-intent">${highlight(item.intent, search.highlightQuery)}</div>
+      <div class="utility-card-bottom">
+        <span class="utility-meta">${escapeHtml(metaLabel)}${item.modifiers?.length ? ' · /modifier' : ''}</span>
+        <div class="utility-intent">${highlight(item.intent, search.highlightQuery)}</div>
+      </div>
     </button>
   `
 }
@@ -2247,8 +2249,7 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
         <div class="summary-stats">
           <div><span>原子总数</span><strong>${items.length}</strong></div>
           <div><span>官方原子</span><strong>${officialUtilityCount}</strong></div>
-          <div><span>TimCSS 版本</span><strong>${escapeHtml(meta.packageVersion)}</strong></div>
-          <div><span>索引生成</span><strong>${escapeHtml(formatGeneratedAt(meta.generatedAt))}</strong></div>
+          <div><span>当前版本</span><strong>${escapeHtml(meta.packageVersion)}</strong></div>
         </div>
         </div>
       </section>
@@ -2471,8 +2472,8 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
           <div class="search-meta">
             <span>当前模式：<strong>${search.intentMode ? '语义意图' : '关键词匹配'}</strong></span>
             <span>结果：<strong>${total}</strong></span>
-            <span>当前渲染：<strong>${renderedCount}</strong></span>
-            <span>快捷键：<strong>/</strong> 聚焦搜索，<strong>⌘K / Ctrl+K</strong> 打开命令面板</span>
+            <span>已渲染：<strong>${renderedCount}</strong></span>
+            <span>快捷键：<strong>/</strong> 搜索，<strong>⌘K / Ctrl+K</strong> 面板</span>
           </div>
           <div class="catalog-actions">
             <button class="inline-btn" data-copy-link>${copiedValue === window.location.href ? '已复制链接' : '复制当前检索链接'}</button>
@@ -2737,9 +2738,9 @@ function renderApp(meta: DocIndexPayload, items: DocItem[]) {
             <div class="footer-card">
               <h2>继续阅读</h2>
               <div class="footer-links">
-                <button class="footer-link-card" data-route="foundations"><strong>尺寸基础</strong><span>先看移动端留白、触控、导航和安全区的尺寸规则。</span></button>
-                <button class="footer-link-card" data-route="catalog"><strong>原子检索</strong><span>按问题、意图和类名搜索，并直接复制最小示例。</span></button>
-                <button class="footer-link-card" data-route="guides"><strong>开始使用</strong><span>先看 H5、微信小程序接入方式和常见边界。</span></button>
+                <button class="footer-link-card" data-route="foundations"><strong>尺寸基础</strong><span>先看留白、触控、导航和安全区规则。</span></button>
+                <button class="footer-link-card" data-route="catalog"><strong>原子检索</strong><span>按问题词或类名直接找原子。</span></button>
+                <button class="footer-link-card" data-route="guides"><strong>开始使用</strong><span>先看接入方式和平台边界。</span></button>
               </div>
             </div>
           </section>
